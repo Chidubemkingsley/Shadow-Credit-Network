@@ -1,8 +1,20 @@
-import { useCallback, useState } from 'react'
+/**
+ * useFheEncrypt - FHE encryption using @cofhe/sdk
+ * 
+ * Handles encrypted credit data submission to FHE-enabled contracts
+ * Uses CoFHE for client-side encryption
+ */
+
+import { useState, useCallback } from 'react'
 import { ethers } from 'ethers'
 import { CREDIT_ENGINE_ABI } from '../abis'
 
-const DEFAULT_ADDRESS = '0x749663A4B343846a7C02d14F7d15c72A2643b02B'
+import { createCofheConfig, createCofheClient } from '@cofhe/sdk/web'
+import { Ethers6Adapter } from '@cofhe/sdk/adapters'
+import { Encryptable } from '@cofhe/sdk'
+import { baseSepolia, arbSepolia } from '@cofhe/sdk/chains'
+
+const DEFAULT_CREDIT_ENGINE = '0x0000000000000000000000000000000000000001'
 
 export interface CreditDataInput {
   income: bigint
@@ -13,22 +25,41 @@ export interface CreditDataInput {
   numDefaults: number
 }
 
-export interface PlaintextCreditData {
-  income: bigint
-  totalDebt: bigint
-  paymentHistory: bigint
-  creditUtilization: bigint
-  accountAge: bigint
-  numDefaults: bigint
+export interface EncryptedCreditData {
+  income: any
+  totalDebt: any
+  paymentHistory: any
+  creditUtilization: any
+  accountAge: any
+  numDefaults: any
 }
 
-export function useFheEncrypt(provider: any, signer: any) {
+let cofheClient: any = null
+
+async function getCofheClient(provider: ethers.BrowserProvider, signer: ethers.Signer) {
+  if (cofheClient) return cofheClient
+
+  const config = createCofheConfig({
+    supportedChains: [baseSepolia, arbSepolia],
+  })
+
+  const client = createCofheClient(config)
+  const { publicClient, walletClient } = await Ethers6Adapter(provider, signer)
+  await client.connect(publicClient, walletClient)
+
+  cofheClient = client
+  return cofheClient
+}
+
+export function useFheEncrypt(provider: ethers.BrowserProvider | null, signer: ethers.Signer | null) {
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const encryptCreditData = useCallback(async (data: CreditDataInput): Promise<PlaintextCreditData | null> => {
-    if (!signer || !provider) {
-      setError('No signer or provider available')
+  const encryptCreditData = useCallback(async (
+    data: CreditDataInput
+  ): Promise<EncryptedCreditData | null> => {
+    if (!provider || !signer) {
+      setError('No provider or signer')
       return null
     }
 
@@ -36,64 +67,124 @@ export function useFheEncrypt(provider: any, signer: any) {
     setError(null)
 
     try {
-      console.log('Processing credit data (simplified mode)...')
-      
+      const client = await getCofheClient(provider, signer)
+      const address = await signer.getAddress()
+
+      console.log('Encrypting credit data for:', address)
+
+      const [encIncome] = await client.encryptInputs([
+        Encryptable.uint64(data.income)
+      ]).execute()
+
+      const [encTotalDebt] = await client.encryptInputs([
+        Encryptable.uint64(data.totalDebt)
+      ]).execute()
+
+      const [encPaymentHistory] = await client.encryptInputs([
+        Encryptable.uint32(BigInt(data.paymentHistory))
+      ]).execute()
+
+      const [encCreditUtilization] = await client.encryptInputs([
+        Encryptable.uint32(BigInt(data.creditUtilization))
+      ]).execute()
+
+      const [encAccountAge] = await client.encryptInputs([
+        Encryptable.uint32(BigInt(data.accountAge))
+      ]).execute()
+
+      const [encNumDefaults] = await client.encryptInputs([
+        Encryptable.uint32(BigInt(data.numDefaults))
+      ]).execute()
+
+      console.log('FHE encryption complete')
+
       return {
-        income: data.income,
-        totalDebt: data.totalDebt,
-        paymentHistory: BigInt(data.paymentHistory),
-        creditUtilization: BigInt(data.creditUtilization),
-        accountAge: BigInt(data.accountAge),
-        numDefaults: BigInt(data.numDefaults),
+        income: encIncome,
+        totalDebt: encTotalDebt,
+        paymentHistory: encPaymentHistory,
+        creditUtilization: encCreditUtilization,
+        accountAge: encAccountAge,
+        numDefaults: encNumDefaults,
       }
     } catch (err: any) {
-      console.error('Processing failed:', err)
-      setError(err.message || 'Processing failed')
+      console.error('FHE encryption failed:', err)
+      setError(err.message || 'Encryption failed')
       return null
     } finally {
       setIsEncrypting(false)
     }
   }, [provider, signer])
 
-  const submitCreditData = useCallback(async (creditData: PlaintextCreditData) => {
+  const submitCreditData = useCallback(async (
+    encryptedData: EncryptedCreditData
+  ): Promise<ethers.ContractTransaction | null> => {
     if (!signer) {
-      setError('No signer available')
+      setError('No signer')
       return null
     }
 
-    const contractAddress = (import.meta as any).env?.VITE_CREDIT_ENGINE_ADDRESS || DEFAULT_ADDRESS
+    const contractAddress = (import.meta as any).env?.VITE_CREDIT_ENGINE_ADDRESS || DEFAULT_CREDIT_ENGINE
     const contract = new ethers.Contract(contractAddress, CREDIT_ENGINE_ABI, signer)
 
     try {
-      console.log('Submitting credit data to contract...', {
-        income: creditData.income.toString(),
-        totalDebt: creditData.totalDebt.toString(),
-        paymentHistory: creditData.paymentHistory.toString(),
-        creditUtilization: creditData.creditUtilization.toString(),
-        accountAge: creditData.accountAge.toString(),
-        numDefaults: creditData.numDefaults.toString(),
-      })
-
+      console.log('Submitting encrypted data to FHE contract...')
+      
       const tx = await contract.submitCreditData(
-        creditData.income,
-        creditData.totalDebt,
-        creditData.paymentHistory,
-        creditData.creditUtilization,
-        creditData.accountAge,
-        creditData.numDefaults
+        encryptedData.income,
+        encryptedData.totalDebt,
+        encryptedData.paymentHistory,
+        encryptedData.creditUtilization,
+        encryptedData.accountAge,
+        encryptedData.numDefaults
       )
-      console.log('Transaction submitted:', tx.hash)
+
+      console.log('Transaction sent:', tx.hash)
       return tx
     } catch (err: any) {
-      console.error('Submit failed:', err)
+      console.error('Submission failed:', err)
       setError(err.reason || err.message || 'Submission failed')
       return null
     }
   }, [signer])
 
+  const computeScore = useCallback(async (): Promise<ethers.ContractTransaction | null> => {
+    if (!signer) return null
+
+    const contractAddress = (import.meta as any).env?.VITE_CREDIT_ENGINE_ADDRESS || DEFAULT_CREDIT_ENGINE
+    const contract = new ethers.Contract(contractAddress, CREDIT_ENGINE_ABI, signer)
+
+    try {
+      console.log('Computing FHE credit score...')
+      const tx = await contract.computeCreditScore()
+      console.log('Score computation:', tx.hash)
+      return tx
+    } catch (err: any) {
+      console.error('Score computation failed:', err)
+      setError(err.message || 'Score computation failed')
+      return null
+    }
+  }, [signer])
+
+  const getScore = useCallback(async (address: string): Promise<number | null> => {
+    if (!provider) return null
+
+    const contractAddress = (import.meta as any).env?.VITE_CREDIT_ENGINE_ADDRESS || DEFAULT_CREDIT_ENGINE
+    const contract = new ethers.Contract(contractAddress, CREDIT_ENGINE_ABI, provider)
+
+    try {
+      const score = await contract.getCreditScore(address)
+      return Number(score)
+    } catch (err) {
+      console.error('Failed to get score:', err)
+      return null
+    }
+  }, [provider])
+
   return {
     encryptCreditData,
     submitCreditData,
+    computeScore,
+    getScore,
     isEncrypting,
     error,
     clearError: () => setError(null),

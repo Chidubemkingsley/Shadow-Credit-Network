@@ -9,11 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cofhe/sdk": "^0.4.0",
     "ethers": "^6.16.0",
     "lucide-react": "^1.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.3"
+    "react-router-dom": "^6.30.3",
+    "snarkjs": "^0.7.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

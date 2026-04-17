@@ -2,7 +2,7 @@ import { task } from 'hardhat/config'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
 import { saveDeployment } from './utils'
 
-task('deploy-credit-delegation', 'Deploy the CreditDelegation contract')
+task('deploy-delegation', 'Deploy the CreditDelegation contract')
 	.setAction(async (args, hre: HardhatRuntimeEnvironment) => {
 		const { ethers, network } = hre
 
@@ -19,6 +19,7 @@ task('deploy-credit-delegation', 'Deploy the CreditDelegation contract')
 		const address = await delegation.getAddress()
 		console.log(`CreditDelegation deployed to: ${address}`)
 
+		// Save deployment
 		saveDeployment(network.name, 'CreditDelegation', address)
 
 		console.log(`\nDeployment complete!`)

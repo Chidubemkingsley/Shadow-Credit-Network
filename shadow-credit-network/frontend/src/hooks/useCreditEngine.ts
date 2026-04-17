@@ -2,8 +2,7 @@ import { useState, useCallback } from 'react'
 import { ethers } from 'ethers'
 import { CREDIT_ENGINE_ABI } from '../abis'
 
-// Replace with deployed contract address
-const DEFAULT_ADDRESS = ''
+const DEFAULT_ADDRESS = '0x749663A4B343846a7C02d14F7d15c72A2643b02B'
 
 export type TxState = 'idle' | 'loading' | 'encrypted' | 'success' | 'error'
 
@@ -54,7 +53,6 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
             riskTier = score >= 740 ? 'Prime' : score >= 670 ? 'Near Prime' : score >= 580 ? 'Subprime' : 'Deep Subprime'
           }
         } catch {
-          // Score not yet decrypted
         }
       }
 
@@ -64,9 +62,9 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
     }
   }, [signer, address, getContract])
 
-  const register = useCallback(async () => {
+  const register = useCallback(async (): Promise<ethers.ContractTransaction | null> => {
     const contract = getContract()
-    if (!contract) return
+    if (!contract) return null
 
     setTxState('loading')
     setTxMessage('Registering on-chain...')
@@ -79,9 +77,11 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
       setTxState('success')
       setTxMessage('Registration complete!')
       await loadProfile()
+      return tx
     } catch (err: any) {
       setTxState('error')
-      setTxMessage(err.message || 'Registration failed')
+      setTxMessage(err.reason || err.message || 'Registration failed')
+      return null
     }
   }, [getContract, loadProfile])
 
@@ -90,40 +90,19 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
     if (!contract) return
 
     setTxState('loading')
-    setTxMessage('Computing encrypted credit score...')
+    setTxMessage('Computing credit score...')
 
     try {
       const tx = await contract.computeCreditScore()
       setTxState('encrypted')
-      setTxMessage('FHE computation in progress...')
+      setTxMessage('Computing...')
       await tx.wait()
       setTxState('success')
       setTxMessage('Credit score computed!')
       await loadProfile()
     } catch (err: any) {
       setTxState('error')
-      setTxMessage(err.message || 'Score computation failed')
-    }
-  }, [getContract, loadProfile])
-
-  const decryptScore = useCallback(async () => {
-    const contract = getContract()
-    if (!contract) return
-
-    setTxState('loading')
-    setTxMessage('Requesting decryption...')
-
-    try {
-      const tx = await contract.requestScoreDecryption()
-      setTxState('encrypted')
-      setTxMessage('Decrypting score...')
-      await tx.wait()
-      setTxState('success')
-      setTxMessage('Score decrypted!')
-      await loadProfile()
-    } catch (err: any) {
-      setTxState('error')
-      setTxMessage(err.message || 'Decryption failed')
+      setTxMessage(err.reason || err.message || 'Score computation failed')
     }
   }, [getContract, loadProfile])
 
@@ -134,7 +113,6 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
     loadProfile,
     register,
     computeScore,
-    decryptScore,
     resetTxState: () => { setTxState('idle'); setTxMessage('') },
   }
 }

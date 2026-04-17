@@ -2,7 +2,6 @@
 pragma solidity ^0.8.25;
 
 import "@fhenixprotocol/cofhe-contracts/FHE.sol";
-import "./interfaces/IZKVerifier.sol";
 
 interface IEncryptedCreditEngineBridge {
     function submitCreditData(
@@ -16,6 +15,15 @@ interface IEncryptedCreditEngineBridge {
 
     function register() external;
     function isRegistered(address user) external view returns (bool);
+}
+
+interface ICreditDataVerifier {
+    function verifyProof(
+        uint256[2] calldata _pA,
+        uint256[2][2] calldata _pB,
+        uint256[2] calldata _pC,
+        uint256[1] calldata _pubSignals
+    ) external view returns (bool);
 }
 
 /// @title CreditDataWithZK
@@ -72,7 +80,7 @@ contract CreditDataWithZK {
     // ──────────────────────────────────────────────
 
     /// @notice ZK verifier contract
-    IZKVerifier public verifier;
+    ICreditDataVerifier public verifier;
 
     /// @notice Credit engine contract (integration target)
     address public creditEngine;
@@ -124,9 +132,10 @@ contract CreditDataWithZK {
     // ──────────────────────────────────────────────
 
     /// @notice Submit encrypted credit data with a ZK proof validating input authenticity
-    /// @param proof ZK proof bytes (Groth16: a[2], b[2][2], c[2])
-    /// @param publicInputs Public inputs to the circuit (must match VK's expected count)
-    /// @param vkHash Hash of the verification key to use
+    /// @param pA Proof element A [2]
+    /// @param pB Proof element B [2][2]
+    /// @param pC Proof element C [2]
+    /// @param pubSignals Public signals (commitment)
     /// @param proofNonce Unique nonce for replay protection
     /// @param income Encrypted annual income
     /// @param totalDebt Encrypted total debt
@@ -135,9 +144,10 @@ contract CreditDataWithZK {
     /// @param accountAge Encrypted account age in days
     /// @param numDefaults Encrypted number of defaults
     function submitWithProof(
-        bytes calldata proof,
-        uint256[] calldata publicInputs,
-        bytes32 vkHash,
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
+        uint256[1] calldata pubSignals,
         uint256 proofNonce,
         InEuint64 calldata income,
         InEuint64 calldata totalDebt,
@@ -149,27 +159,23 @@ contract CreditDataWithZK {
         if (address(verifier) == address(0)) revert VerifierNotSet();
         if (address(creditEngineInterface) == address(0)) revert CreditEngineNotSet();
 
-        // Anti-replay: check nonce
         if (usedNonces[msg.sender][proofNonce]) revert ProofAlreadyUsed();
         usedNonces[msg.sender][proofNonce] = true;
 
-        // Verify the ZK proof
-        bool proofValid = verifier.verifyProofWithVK(vkHash, proof, publicInputs);
+        bool proofValid = verifier.verifyProof(pA, pB, pC, pubSignals);
         if (!proofValid) revert InvalidProof();
 
-        emit ZKProofVerified(msg.sender, vkHash, true);
+        emit ZKProofVerified(msg.sender, bytes32(0), true);
 
-        // Record submission
         uint256 submissionId = submissionCount++;
         submissions[submissionId] = ProofSubmission({
             prover: msg.sender,
-            vkHash: vkHash,
+            vkHash: bytes32(0),
             submittedAt: block.timestamp,
             verified: true,
             proofNonce: proofNonce
         });
 
-        // Forward encrypted data to credit engine
         creditEngineInterface.submitCreditData(
             income,
             totalDebt,
@@ -182,18 +188,20 @@ contract CreditDataWithZK {
         emit CreditDataSubmittedWithProof(msg.sender, submissionId);
     }
 
-    /// @notice Verify a ZK proof without submitting data (utility function)
-    /// @param proof ZK proof bytes
-    /// @param publicInputs Public inputs
-    /// @param vkHash Verification key hash
+    /// @notice Verify a ZK proof without submitting data
+    /// @param pA Proof element A [2]
+    /// @param pB Proof element B [2][2]
+    /// @param pC Proof element C [2]
+    /// @param pubSignals Public signals
     /// @return valid Whether the proof is valid
     function verifyOnly(
-        bytes calldata proof,
-        uint256[] calldata publicInputs,
-        bytes32 vkHash
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
+        uint256[1] calldata pubSignals
     ) external view returns (bool valid) {
         if (address(verifier) == address(0)) revert VerifierNotSet();
-        return verifier.verifyProofWithVK(vkHash, proof, publicInputs);
+        return verifier.verifyProof(pA, pB, pC, pubSignals);
     }
 
     // ──────────────────────────────────────────────
@@ -224,7 +232,7 @@ contract CreditDataWithZK {
     /// @notice Set the ZK verifier contract
     function setVerifier(address _verifier) external onlyOwner {
         require(_verifier != address(0), "Invalid address");
-        verifier = IZKVerifier(_verifier);
+        verifier = ICreditDataVerifier(_verifier);
         emit VerifierSet(_verifier);
     }
 

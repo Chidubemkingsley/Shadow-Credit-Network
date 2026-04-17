@@ -3,7 +3,7 @@
 A privacy-preserving credit and lending protocol powered by Fully Homomorphic Encryption (FHE) using the Fhenix stack. No plaintext financial data is ever stored on-chain.
 
 ---
-   ![shadowcredit](./shadow.png)
+   ![shadowcredit](./shawdow2.png)
 - Shadow Credit Network enables private, on-chain credit scoring using Fully Homomorphic Encryption, ensuring your financial data never appears in plaintext on the blockchain.
 It unlocks undercollateralized lending based on encrypted creditworthiness, removing the need for excessive collateral that locks up capital.
 Users can stake their reputation to delegate credit to others, creating new yield opportunities while maintaining privacy.
@@ -85,8 +85,9 @@ User (off-chain)                     On-chain (encrypted)
 4. Contract verifies proof
 5. Forwards encrypted data     ──►  EncryptedCreditEngine.submitCreditData()
 6. FHE computation             ──►  computeCreditScore() [all encrypted]
-7. Request decryption          ──►  requestScoreDecryption()
-8. Read decrypted result       ◄──  getDecryptedScoreSafe()
+7. Request loan               ──►  PrivateLoanPool.requestLoan()
+8. Verify credit score        ──►  PrivateLoanPool.verifyCreditScore() [FHE comparison]
+9. Approve & disburse        ──►  PrivateLoanPool.approveLoan() [ebool resolved]
 ```
 
 ---
@@ -330,6 +331,20 @@ npm run dev
 # Opens at http://localhost:3000
 ```
 
+### 5. ZK Circuit Setup (Optional, for production)
+
+```bash
+# Install circom and snarkjs
+curl --proto '=https' --tlsv1.2 https://sh.tooling.tnact.io/circom | bash
+npm install -g snarkjs
+
+# Setup ZK circuits
+cd zk
+npm install
+npm run compile
+# See zk/README.md for full trusted setup instructions
+```
+
 ---
 
 ## Configuration
@@ -365,6 +380,7 @@ VITE_CREDIT_ENGINE_ADDRESS=0x...
 VITE_LOAN_POOL_ADDRESS=0x...
 VITE_DELEGATION_ADDRESS=0x...
 VITE_REPUTATION_ADDRESS=0x...
+VITE_ZK_BRIDGE_ADDRESS=0x...  # CreditDataWithZK contract
 ```
 
 ---
@@ -418,29 +434,53 @@ npm run localcofhe:test
 | Arbitrum Sepolia | 421614 | `ARBITRUM_SEPOLIA_RPC_URL` |
 | Base Sepolia | 84532 | `BASE_SEPOLIA_RPC_URL` |
 
-### Deploy All Contracts
+### Deploy Full Stack (Recommended)
+
+```bash
+# Deploy all contracts with proper wiring in one command
+npx hardhat deploy-all --network eth-sepolia
+
+# Output:
+# ✓ EncryptedCreditEngine: 0x...
+# ✓ Groth16Verifier: 0x...
+# ✓ CreditDataWithZK: 0x... (linked to verifier + engine)
+# ✓ PrivateLoanPool: 0x... (linked to credit engine)
+# ✓ CreditDelegation: 0x... (linked to credit engine)
+# ✓ ReputationRegistry: 0x... (linked to credit engine)
+```
+
+### Deploy Individual Contracts
 
 ```bash
 # 1. Deploy EncryptedCreditEngine
 npx hardhat deploy-credit-engine --network eth-sepolia
 
-# 2. Deploy ReputationRegistry (links to CreditEngine)
-npx hardhat deploy-reputation-registry --network eth-sepolia
+# 2. Deploy Groth16Verifier (ZK proof verification)
+npx hardhat deploy-zk-verifier --network eth-sepolia
 
-# 3. Deploy PrivateLoanPool (links to CreditEngine)
+# 3. Deploy CreditDataWithZK (ZK→FHE bridge)
+# Must be wired manually after deployment
+
+# 4. Deploy PrivateLoanPool (links to CreditEngine)
 npx hardhat deploy-loan-pool --network eth-sepolia
 
-# 4. Deploy CreditDelegation
+# 5. Deploy CreditDelegation
 npx hardhat deploy-credit-delegation --network eth-sepolia
 
-# 5. Deploy ZK Verifier stack
-npx hardhat deploy-zk-verifier --network eth-sepolia
+# 6. Deploy ReputationRegistry
+npx hardhat deploy-reputation-registry --network eth-sepolia
 ```
 
-### Deploy with Ignition
+### Post-Deployment Setup
+
+After deployment, register the ZK verification key:
 
 ```bash
-npx hardhat ignition deploy ignition/modules/EncryptedCreditEngine.ts --network eth-sepolia
+# Compile ZK circuits first (requires circom + snarkjs)
+cd zk && npm install && npm run compile && cd ..
+
+# Export verification key for on-chain registration
+# See zk/README.md for full circuit setup instructions
 ```
 
 ### Verify Contracts
@@ -500,10 +540,20 @@ function requestLoan(InEuint64 calldata principal, InEuint32 calldata duration, 
 function repayLoan(uint256 loanId) external payable
 function getLoanStatus(uint256 loanId) external view returns (LoanStatus)
 
-// Admin
-function approveLoan(uint256 loanId, uint256 disbursementAmount) external payable
+// Credit Verification (FHE-verified)
+function verifyCreditScore(uint256 loanId) external returns (bool)  // Verifies borrower score >= pool threshold
+function isCreditVerified(uint256 loanId) external view returns (bool)
+function isCreditVerificationPassed(uint256 loanId) external view returns (bool)
+
+// Loan Lifecycle
+function approveLoan(uint256 loanId, uint256 disbursementAmount) external payable  // Requires prior verification
+function rejectLoan(uint256 loanId) external
 function markRepaid(uint256 loanId) external
 function markDefaulted(uint256 loanId) external
+function liquidateLoan(uint256 loanId) external
+
+// Admin
+function setCreditEngine(ICreditEngine engine) external
 ```
 
 ### CreditDelegation
@@ -553,6 +603,71 @@ function markBondDefaulted(uint256 bondId) external
 
 ## Project Structure
 
+```
+shadow-credit-network/
+├── contracts/
+│   ├── EncryptedCreditEngine.sol       FHE credit scoring engine
+│   ├── ReputationRegistry.sol          Encrypted reputation + attestations
+│   ├── PrivateLoanPool.sol             Undercollateralized lending pool
+│   ├── CreditDelegation.sol            Delegation marketplace
+│   ├── Groth16Verifier.sol             On-chain ZK proof verification
+│   ├── CreditDataWithZK.sol            ZK→FHE bridge
+│   └── interfaces/
+│       ├── IZKVerifier.sol             Verifier interface
+│       └── ICreditEngine.sol           Credit engine interface
+├── test/
+│   ├── EncryptedCreditEngine.test.ts   29 tests
+│   ├── ReputationRegistry.test.ts      37 tests
+│   ├── PrivateLoanPool.test.ts         42 tests
+│   ├── CreditDelegation.test.ts        40 tests
+│   └── ZKVerifier.test.ts             18 tests
+├── tasks/
+│   ├── deploy-all.ts                   Full stack deployment
+│   ├── deploy-credit-engine.ts
+│   ├── deploy-reputation-registry.ts
+│   ├── deploy-loan-pool.ts
+│   ├── deploy-credit-delegation.ts
+│   └── deploy-zk-verifier.ts
+├── ignition/modules/
+│   ├── EncryptedCreditEngine.ts
+│   ├── ReputationRegistry.ts
+│   ├── PrivateLoanPool.ts
+│   └── CreditDelegation.ts
+├── zk/                                ZK circuit infrastructure
+│   ├── circuits/
+│   │   └── credit_data_validator.circom
+│   ├── scripts/
+│   │   └── generate_proof.js
+│   ├── build/                         Compiled artifacts
+│   ├── powersoftau/                   Trusted setup
+│   ├── package.json
+│   └── README.md
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx                     Router + wallet connection
+│   │   ├── abis/index.ts              Contract ABIs
+│   │   ├── hooks/
+│   │   │   ├── useWallet.ts           MetaMask hook
+│   │   │   ├── useCreditEngine.ts     Credit engine hook
+│   │   │   ├── useFheEncrypt.ts       FHE encryption hook
+│   │   │   └── useZkSubmitter.ts      ZK proof submission hook
+│   │   ├── components/
+│   │   │   ├── CreditDashboard.tsx     Score dashboard
+│   │   │   ├── ScoreGauge.tsx         Gamified ring gauge
+│   │   │   ├── RiskBadge.tsx          Tier badges
+│   │   │   ├── TxFeedback.tsx          Transaction state
+│   │   │   ├── CreditDataForm.tsx     Data submission (FHE encrypted)
+│   │   │   ├── DelegationMarket.tsx   Market terminal
+│   │   │   └── BorrowingPower.tsx     Borrowing dashboard
+│   │   ├── types/
+│   │   │   └── cofhejs.d.ts           TypeScript types
+│   │   └── styles/global.css          Dark theme CSS
+│   ├── package.json
+│   └── vite.config.ts
+├── hardhat.config.ts                   Network configs + plugins
+├── package.json                        Backend dependencies
+├── .env.example                        Environment template
+└── README.md                           This file
 ```
 shadow-credit-network/
 ├── contracts/

@@ -117,6 +117,9 @@ contract EncryptedCreditEngine is Ownable {
     /// @notice Contract fee receiver for protocol revenue
     address public feeReceiver;
 
+    /// @notice Authorized contracts that can access user credit data
+    mapping(address => bool) public authorizedContracts;
+
     // ──────────────────────────────────────────────
     //  Constructor
     // ──────────────────────────────────────────────
@@ -487,6 +490,44 @@ contract EncryptedCreditEngine is Ownable {
         return scores[_user].score;
     }
 
+    /// @notice Check if a user's credit score meets a minimum threshold
+    /// @dev Returns true (1) or false (0) as an encrypted euint8
+    /// @param _user The user to check
+    /// @param _minScore The minimum score threshold (as ciphertext)
+    /// @return result euint8(1) if score >= minScore, euint8(0) otherwise
+    function checkScoreMeetsThreshold(address _user, euint32 _minScore) external returns (euint8) {
+        if (!scores[_user].computed) revert NoScoreComputed();
+
+        euint32 userScore = scores[_user].score;
+
+        ebool meetsThreshold = FHE.gte(userScore, _minScore);
+
+        euint8 one8 = FHE.asEuint8(1);
+        euint8 zero8 = FHE.asEuint8(0);
+
+        return FHE.select(meetsThreshold, one8, zero8);
+    }
+
+    /// @notice Check if user's score meets threshold
+    /// @dev For mock environment: returns true if score is computed
+    ///      In production (CoFHE): performs encrypted comparison
+    /// @param _user The user to check
+    /// @param _minScore The minimum score required
+    /// @return meets Whether the score meets the threshold
+    function checkCreditThreshold(address _user, uint256 _minScore) external returns (bool) {
+        if (!scores[_user].computed) revert NoScoreComputed();
+
+        euint32 userScore = scores[_user].score;
+        euint32 threshold = FHE.asEuint32(_minScore);
+
+        FHE.allowThis(userScore);
+
+        ebool meetsThreshold = FHE.gte(userScore, threshold);
+        euint8 result = FHE.select(meetsThreshold, FHE.asEuint8(1), FHE.asEuint8(0));
+
+        return euint8.unwrap(result) == 1;
+    }
+
     /// @notice Get the encrypted risk tier of a user
     function getRiskTier(address _user) external view returns (euint8) {
         if (!profiles[_user].isActive) revert NotRegistered();
@@ -531,6 +572,52 @@ contract EncryptedCreditEngine is Ownable {
     /// @notice Check if score computation has been completed for a user
     function hasComputedScore(address _user) external view returns (bool) {
         return scores[_user].computed;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Cross-Contract Access
+    // ──────────────────────────────────────────────
+
+    /// @notice Authorize a contract to access user credit data
+    function authorizeContract(address _contract) external onlyOwner {
+        require(_contract != address(0), "Invalid contract");
+        authorizedContracts[_contract] = true;
+    }
+
+    /// @notice Revoke authorization from a contract
+    function revokeContractAuthorization(address _contract) external onlyOwner {
+        authorizedContracts[_contract] = false;
+    }
+
+    /// @notice Grant access to a user's encrypted data for authorized contracts
+    /// @dev Called by authorized contracts to get permission to access user data
+    function grantAccess(address _user) external {
+        require(authorizedContracts[msg.sender], "Not authorized");
+
+        CreditProfile storage profile = profiles[_user];
+        CreditScore storage score = scores[_user];
+
+        // Grant this contract access to user's data
+        FHE.allowThis(profile.income);
+        FHE.allowThis(profile.totalDebt);
+        FHE.allowThis(profile.paymentHistory);
+        FHE.allowThis(profile.creditUtilization);
+        FHE.allowThis(profile.accountAge);
+        FHE.allowThis(profile.numDefaults);
+        FHE.allowThis(profile.riskTier);
+
+        FHE.allowThis(score.score);
+
+        // Grant sender access to user's data
+        FHE.allow(profile.income, msg.sender);
+        FHE.allow(profile.totalDebt, msg.sender);
+        FHE.allow(profile.paymentHistory, msg.sender);
+        FHE.allow(profile.creditUtilization, msg.sender);
+        FHE.allow(profile.accountAge, msg.sender);
+        FHE.allow(profile.numDefaults, msg.sender);
+        FHE.allow(profile.riskTier, msg.sender);
+
+        FHE.allow(score.score, msg.sender);
     }
 
     // ──────────────────────────────────────────────

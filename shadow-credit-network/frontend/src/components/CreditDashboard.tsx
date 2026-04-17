@@ -18,7 +18,6 @@ export function CreditDashboard({ signer, address }: CreditDashboardProps) {
     loadProfile,
     register,
     computeScore,
-    decryptScore,
     resetTxState,
   } = useCreditEngine(signer, address)
 
@@ -72,11 +71,6 @@ export function CreditDashboard({ signer, address }: CreditDashboardProps) {
             {profile.isRegistered && !profile.hasScore && (
               <button className="btn btn-primary" onClick={computeScore} disabled={txState === 'loading'}>
                 Compute Score
-              </button>
-            )}
-            {profile.hasScore && !profile.isDecrypted && (
-              <button className="btn btn-secondary" onClick={decryptScore} disabled={txState === 'loading'}>
-                Decrypt Score
               </button>
             )}
             {profile.hasScore && profile.isDecrypted && (

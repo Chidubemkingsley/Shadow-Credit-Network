@@ -3,7 +3,6 @@ import { HardhatRuntimeEnvironment } from 'hardhat/types'
 import { saveDeployment, getDeployment } from './utils'
 
 task('deploy-loan-pool', 'Deploy the PrivateLoanPool contract')
-	.addOptionalParam('feeReceiver', 'Fee receiver address (defaults to deployer)')
 	.addOptionalParam('creditEngine', 'Address of EncryptedCreditEngine')
 	.setAction(async (args, hre: HardhatRuntimeEnvironment) => {
 		const { ethers, network } = hre
@@ -14,11 +13,8 @@ task('deploy-loan-pool', 'Deploy the PrivateLoanPool contract')
 		console.log(`Deployer: ${deployer.address}`)
 		console.log(`Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH`)
 
-		const feeReceiver = args.feeReceiver || deployer.address
-		console.log(`Fee receiver: ${feeReceiver}`)
-
 		const PrivateLoanPool = await ethers.getContractFactory('PrivateLoanPool')
-		const pool = await PrivateLoanPool.deploy(deployer.address, feeReceiver)
+		const pool = await PrivateLoanPool.deploy(deployer.address)
 		await pool.waitForDeployment()
 
 		const address = await pool.getAddress()
@@ -43,7 +39,7 @@ task('deploy-loan-pool', 'Deploy the PrivateLoanPool contract')
 			try {
 				await hre.run('verify:verify', {
 					address: address,
-					constructorArguments: [deployer.address, feeReceiver],
+					constructorArguments: [deployer.address],
 				})
 				console.log('Contract verified successfully')
 			} catch (error: any) {

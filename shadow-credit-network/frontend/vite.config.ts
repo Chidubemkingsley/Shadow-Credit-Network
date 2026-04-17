@@ -12,4 +12,9 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  resolve: {
+    alias: {
+      'fhenixjs': '/node_modules/fhenixjs/dist/fhenix.esm.js',
+    },
+  },
 })

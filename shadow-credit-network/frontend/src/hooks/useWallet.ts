@@ -2,17 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { ethers } from 'ethers'
 
 // ── Target network config ─────────────────────────────────────────────────────
-// Change REQUIRED_CHAIN_ID + REQUIRED_CHAIN to whichever network you deploy to.
-// Fhenix Sepolia = 8008148 | Base Sepolia = 84532 | Arbitrum Sepolia = 421614
-
-const REQUIRED_CHAIN_ID = 11155111 // Ethereum Sepolia
+// Base Sepolia Testnet (supports FHE via CoFHE)
+const REQUIRED_CHAIN_ID = 84532 // Base Sepolia
 
 const REQUIRED_CHAIN = {
-  chainId:          '0xaa36a7',                          // 11155111 in hex
-  chainName:        'Sepolia Testnet',
-  nativeCurrency:   { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
-  rpcUrls:          ['https://rpc.sepolia.org'],
-  blockExplorerUrls:['https://sepolia.etherscan.io'],
+  chainId:          '0x14a34',                          // 84532 in hex
+  chainName:        'Base Sepolia',
+  nativeCurrency:   { name: 'Base Sepolia ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls:          ['https://sepolia.base.org'],
+  blockExplorerUrls:['https://sepolia.basescan.org'],
 } as const
 
 // ─────────────────────────────────────────────────────────────────────────────

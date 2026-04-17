@@ -10,7 +10,10 @@ describe('PrivateLoanPool', function () {
 		const PrivateLoanPool = await hre.ethers.getContractFactory('PrivateLoanPool')
 		const pool = await PrivateLoanPool.connect(owner).deploy(owner.address, feeReceiver.address)
 
-		return { pool, owner, alice, bob, charlie, feeReceiver }
+		const EncryptedCreditEngine = await hre.ethers.getContractFactory('EncryptedCreditEngine')
+		const creditEngine = await EncryptedCreditEngine.connect(owner).deploy(feeReceiver.address)
+
+		return { pool, creditEngine, owner, alice, bob, charlie, feeReceiver }
 	}
 
 	async function fundPool(pool: any, funder: any, amount: bigint) {
@@ -26,6 +29,41 @@ describe('PrivateLoanPool', function () {
 			cofhejs.encrypt([Encryptable.uint32(BigInt(duration))] as const)
 		)
 		return pool.connect(borrower).requestLoan(encPrincipal, encDuration, riskPool)
+	}
+
+	async function setupBorrowerWithScore(creditEngine: any, borrower: any) {
+		await creditEngine.connect(borrower).register()
+		await hre.cofhe.expectResultSuccess(hre.cofhe.initializeWithHardhatSigner(borrower))
+
+		const [encIncome] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint64(100_000n)] as const)
+		)
+		const [encDebt] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint64(20_000n)] as const)
+		)
+		const [encPaymentHistory] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint32(9500n)] as const)
+		)
+		const [encUtilization] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint32(3000n)] as const)
+		)
+		const [encAccountAge] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint32(1825n)] as const)
+		)
+		const [encDefaults] = await hre.cofhe.expectResultSuccess(
+			cofhejs.encrypt([Encryptable.uint32(0n)] as const)
+		)
+
+		await creditEngine.connect(borrower).submitCreditData(
+			encIncome,
+			encDebt,
+			encPaymentHistory,
+			encUtilization,
+			encAccountAge,
+			encDefaults
+		)
+
+		await creditEngine.connect(borrower).computeCreditScore()
 	}
 
 	beforeEach(function () {
@@ -211,11 +249,30 @@ describe('PrivateLoanPool', function () {
 	// ──────────────────────────────────────────────
 
 	describe('Loan Approval', function () {
-		it('Should approve a pending loan', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+		it('Should verify credit score before approval', async function () {
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+
+			await pool.connect(owner).forceCreditVerification(0, true)
+
+			expect(await pool.isCreditVerified(0)).to.be.true
+			expect(await pool.isCreditVerificationPassed(0)).to.be.true
+		})
+
+		it('Should approve a pending loan after credit verification', async function () {
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
+			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
+
+			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 
 			await expect(pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1')))
 				.to.emit(pool, 'LoanApproved')
@@ -233,11 +290,28 @@ describe('PrivateLoanPool', function () {
 				.to.emit(pool, 'LoanRejected')
 		})
 
-		it('Should revert approval from non-owner', async function () {
-			const { pool, alice } = await loadFixture(deployPoolFixture)
+		it('Should revert approval without credit verification', async function () {
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+
+			await expect(pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1')))
+				.to.be.revertedWithCustomError(pool, 'CreditNotVerified')
+		})
+
+		it('Should revert approval from non-owner', async function () {
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
+			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
+
+			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 
 			await expect(pool.connect(alice).approveLoan(0, hre.ethers.parseEther('1'))).to.be.revertedWithCustomError(
 				pool,
@@ -254,10 +328,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should disburse ETH to borrower on approval', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 
 			const balanceBefore = await hre.ethers.provider.getBalance(alice.address)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
@@ -273,10 +351,14 @@ describe('PrivateLoanPool', function () {
 
 	describe('Repayment', function () {
 		it('Should accept repayment', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			const repayAmount = hre.ethers.parseEther('0.1')
@@ -286,10 +368,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should revert repayment from non-borrower', async function () {
-			const { pool, owner, alice, bob } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice, bob } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await expect(
@@ -298,10 +384,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should revert repayment of zero amount', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await expect(pool.connect(alice).repayLoan(0, { value: 0 })).to.be.reverted
@@ -319,10 +409,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should mark loan as repaid', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await pool.connect(owner).markRepaid(0)
@@ -336,10 +430,14 @@ describe('PrivateLoanPool', function () {
 
 	describe('Default & Liquidation', function () {
 		it('Should mark loan as defaulted after due date', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			// Fast forward past due date (Moderate: 180 days max + 1)
@@ -352,10 +450,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should revert default before due date', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await expect(pool.connect(owner).markDefaulted(0)).to.be.revertedWithCustomError(
@@ -365,10 +467,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should liquidate a defaulted loan', async function () {
-			const { pool, owner, alice, charlie } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice, charlie } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await time.increase(181 * 86400)
@@ -381,10 +487,14 @@ describe('PrivateLoanPool', function () {
 		})
 
 		it('Should revert liquidation of non-defaulted loan', async function () {
-			const { pool, owner, alice } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice } = await loadFixture(deployPoolFixture)
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+			await setupBorrowerWithScore(creditEngine, alice)
 
 			await requestLoan(pool, alice, hre.ethers.parseEther('1').valueOf(), 90 * 86400, 1)
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 
 			await expect(pool.connect(alice).liquidateLoan(0)).to.be.revertedWithCustomError(
@@ -522,7 +632,14 @@ describe('PrivateLoanPool', function () {
 
 	describe('Full Flow', function () {
 		it('Should complete full lending lifecycle', async function () {
-			const { pool, owner, alice, bob } = await loadFixture(deployPoolFixture)
+			const { pool, creditEngine, owner, alice, bob } = await loadFixture(deployPoolFixture)
+
+			// Authorize pool to access credit engine
+			await pool.connect(owner).setCreditEngine(await creditEngine.getAddress())
+			await creditEngine.connect(owner).authorizeContract(await pool.getAddress())
+
+			// Setup Bob with credit score
+			await setupBorrowerWithScore(creditEngine, bob)
 
 			// 1. Alice funds pool
 			await fundPool(pool, alice, hre.ethers.parseEther('50'))
@@ -532,7 +649,8 @@ describe('PrivateLoanPool', function () {
 			await requestLoan(pool, bob, hre.ethers.parseEther('5').valueOf(), 90 * 86400, 1)
 			expect(await pool.getLoanStatus(0)).to.equal(0) // Pending
 
-			// 3. Owner approves loan
+			// 3. Verify credit and approve loan
+			await pool.connect(owner).forceCreditVerification(0, true)
 			await pool.connect(owner).approveLoan(0, hre.ethers.parseEther('1'))
 			expect(await pool.getLoanStatus(0)).to.equal(1) // Active
 

@@ -5,6 +5,7 @@ import { CreditDashboard } from './components/CreditDashboard'
 import { CreditDataForm } from './components/CreditDataForm'
 import { DelegationMarket } from './components/DelegationMarket'
 import { BorrowingPower } from './components/BorrowingPower'
+import { ethers } from 'ethers'
 
 function App() {
   const wallet = useWallet()
@@ -99,8 +100,8 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<CreditDashboard signer={wallet.signer} address={wallet.address} />} />
-            <Route path="/submit" element={<CreditDataForm signer={wallet.signer} address={wallet.address} />} />
-            <Route path="/borrow" element={<BorrowingPower signer={wallet.signer} address={wallet.address} />} />
+            <Route path="/submit" element={<CreditDataForm signer={wallet.signer} address={wallet.address} provider={wallet.provider} />} />
+            <Route path="/borrow" element={<BorrowingPower signer={wallet.signer} address={wallet.address} provider={wallet.provider} />} />
             <Route path="/delegation" element={<DelegationMarket signer={wallet.signer} address={wallet.address} />} />
           </Routes>
         </main>

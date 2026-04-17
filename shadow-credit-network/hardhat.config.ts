@@ -20,6 +20,16 @@ const config: HardhatUserConfig = {
 	},
 	defaultNetwork: 'hardhat',
 	networks: {
+		// Fhenix Helium Testnet (supports FHE)
+		'helium': {
+			url: 'https://api.helium.fhenix.zone',
+			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+			chainId: 8008135,
+			gasMultiplier: 1.2,
+			timeout: 60000,
+			httpHeaders: {},
+		},
+
 		// The plugin already provides localcofhe configuration
 
 		// Sepolia testnet configuration

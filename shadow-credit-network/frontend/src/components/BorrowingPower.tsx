@@ -23,6 +23,7 @@ export function BorrowingPower({ signer, address, provider }: BorrowingPowerProp
   const [txMessage, setTxMessage] = useState('')
   const [lenderDeposits, setLenderDeposits] = useState<Array<{address: string, amount: bigint, depositedAt: number}>>([])
   const [userLoans, setUserLoans] = useState<any[]>([])
+  const [userLoanIds, setUserLoanIds] = useState<number[]>([])
   const [repayLoanId, setRepayLoanId] = useState<number | null>(null)
   const [repayAmount, setRepayAmount] = useState('')
 
@@ -39,13 +40,14 @@ export function BorrowingPower({ signer, address, provider }: BorrowingPowerProp
     const loans = await getUserLoans()
     if (loans) {
       setUserLoans(loans.loans)
+      setUserLoanIds(loans.loanIds)
     }
   }
 
   const handleRepayLoan = async () => {
     if (repayLoanId === null) return
     const amount = ethers.parseEther(repayAmount)
-    const tx = await repayLoan(repayLoanId, amount)
+    const tx = await repayLoan(userLoanIds[repayLoanId], amount)
     if (tx) {
       setRepayLoanId(null)
       setRepayAmount('')
@@ -382,7 +384,7 @@ export function BorrowingPower({ signer, address, provider }: BorrowingPowerProp
                       Remaining: <span style={{ color: loan.status === 1 ? 'var(--accent-red)' : 'var(--text-primary)' }}>{Number(ethers.formatEther(remaining)).toFixed(4)} ETH</span>
                     </div>
                     <div style={{ color: 'var(--text-muted)' }}>
-                      Loan ID: <span style={{ fontFamily: 'monospace' }}>#{index}</span>
+                      Loan ID: <span style={{ fontFamily: 'monospace' }}>#{userLoanIds[index] ?? index}</span>
                     </div>
                   </div>
                 </div>

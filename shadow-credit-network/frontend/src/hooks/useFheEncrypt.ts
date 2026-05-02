@@ -117,7 +117,7 @@ export function useFheEncrypt(provider: ethers.BrowserProvider | null, signer: e
 
   const submitCreditData = useCallback(async (
     encryptedData: EncryptedCreditData
-  ): Promise<ethers.ContractTransaction | null> => {
+  ): Promise<ethers.ContractTransactionResponse | null> => {
     if (!signer) {
       setError('No signer')
       return null
@@ -147,7 +147,7 @@ export function useFheEncrypt(provider: ethers.BrowserProvider | null, signer: e
     }
   }, [signer])
 
-  const computeScore = useCallback(async (): Promise<ethers.ContractTransaction | null> => {
+  const computeScore = useCallback(async (): Promise<ethers.ContractTransactionResponse | null> => {
     if (!signer) return null
 
     const contractAddress = (import.meta as any).env?.VITE_CREDIT_ENGINE_ADDRESS || DEFAULT_CREDIT_ENGINE

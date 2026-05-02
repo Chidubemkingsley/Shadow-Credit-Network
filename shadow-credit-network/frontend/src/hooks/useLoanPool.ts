@@ -32,27 +32,6 @@ export interface LenderDeposit {
   depositedAt: number
 }
 
-export interface UserLoans {
-  loanIds: number[]
-  loans: Array<{
-    borrower: string
-    principal: bigint
-    interestRate: bigint
-    repaidAmount: bigint
-    totalOwed: bigint
-    status: number
-    dueDate: bigint
-    creditVerified: boolean
-    creditPassed: boolean
-  }>
-}
-
-export interface LenderDeposit {
-  address: string
-  amount: bigint
-  depositedAt: number
-}
-
 export function useLoanPool(signer: ethers.Signer | null, address: string | null) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

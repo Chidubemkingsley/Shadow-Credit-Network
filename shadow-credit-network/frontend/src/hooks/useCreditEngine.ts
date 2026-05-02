@@ -62,7 +62,7 @@ export function useCreditEngine(signer: ethers.Signer | null, address: string | 
     }
   }, [signer, address, getContract])
 
-  const register = useCallback(async (): Promise<ethers.ContractTransaction | null> => {
+  const register = useCallback(async (): Promise<ethers.ContractTransactionResponse | null> => {
     const contract = getContract()
     if (!contract) return null
 

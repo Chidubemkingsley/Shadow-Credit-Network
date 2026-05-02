@@ -117,21 +117,21 @@ contract PrivateLoanPool is Ownable {
         poolConfigs[uint256(RiskPool.Conservative)] = PoolConfig({
             maxLoanToDeposit: 3000,
             baseInterestRate: 300,
-            maxDuration: 90 days,
+            maxDuration: 90,
             minCreditScore: 740
         });
 
         poolConfigs[uint256(RiskPool.Moderate)] = PoolConfig({
             maxLoanToDeposit: 5000,
             baseInterestRate: 800,
-            maxDuration: 180 days,
+            maxDuration: 180,
             minCreditScore: 670
         });
 
         poolConfigs[uint256(RiskPool.Aggressive)] = PoolConfig({
             maxLoanToDeposit: 7500,
             baseInterestRate: 1500,
-            maxDuration: 365 days,
+            maxDuration: 365,
             minCreditScore: 580
         });
     }
@@ -197,7 +197,7 @@ contract PrivateLoanPool is Ownable {
         PoolConfig storage config = poolConfigs[uint256(_riskPool)];
         
         uint256 duration = _duration > 0 ? _duration : config.maxDuration;
-        uint256 interestComponent = (_principal * config.baseInterestRate * duration) / (365 days * 10000);
+        uint256 interestComponent = (_principal * config.baseInterestRate * duration) / (365 * 10000);
         uint256 totalOwed = _principal + interestComponent;
 
         uint256 loanId = loanCount++;

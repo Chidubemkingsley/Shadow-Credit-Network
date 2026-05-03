@@ -1,187 +1,261 @@
-import { useState, useCallback } from 'react'
-import { ethers } from 'ethers'
-import { DELEGATION_ABI } from '../abis'
+import { useState, useCallback } from "react";
+import { ethers } from "ethers";
+import { useWallet } from "@/lib/wallet";
+import { getDelegationContract, parseContractError, getOfferStatusLabel, getBondStatusLabel, ADDRESSES } from "@/lib/contracts";
 
-const DEFAULT_DELEGATION_ADDRESS = '0xA97c943555E92b7E8472118A3b058e72edcDC694'
-
-export interface DelegationOffer {
-  id: number
-  delegator: string
-  maxAmount: bigint
-  availableAmount: bigint
-  yieldRate: bigint
-  minCreditScore: bigint
-  status: number
-  activeBonds: number
-  maxBonds: number
+export interface Offer {
+  id: number;
+  delegator: string;
+  maxAmount: bigint;
+  yieldRate: bigint;
+  minScore: bigint;
+  available: bigint;
+  activeBonds: number;
+  maxBonds: number;
+  status: number;
+  statusLabel: string;
 }
 
-export function useDelegation(signer: ethers.Signer | null, address: string | null) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [offers, setOffers] = useState<DelegationOffer[]>([])
-  const [totalDelegated, setTotalDelegated] = useState(0n)
+export interface Bond {
+  id: number;
+  delegator: string;
+  borrower: string;
+  amount: bigint;
+  repaid: bigint;
+  yieldEarned: bigint;
+  yieldPaidOut: bigint;  // V2 only
+  yieldRate: bigint;
+  dueDate: bigint;       // V2 only
+  status: number;
+  statusLabel: string;
+  isExpired: boolean;    // V2 only
+}
+
+export function useDelegation() {
+  const { signer, provider, address } = useWallet();
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [myOffers, setMyOffers] = useState<Offer[]>([]);
+  const [myBonds, setMyBonds] = useState<Bond[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   const getContract = useCallback(() => {
-    if (!signer) return null
-    const contractAddress = (import.meta as any).env?.VITE_DELEGATION_ADDRESS || DEFAULT_DELEGATION_ADDRESS
-    return new ethers.Contract(contractAddress, DELEGATION_ABI, signer)
-  }, [signer])
+    if (!signer) return null;
+    return getDelegationContract(signer);
+  }, [signer]);
 
+  const getReadContract = useCallback(() => {
+    if (!provider) return null;
+    return getDelegationContract(provider);
+  }, [provider]);
+
+  // ── Load all active offers ────────────────────────────────────────────────
   const loadOffers = useCallback(async () => {
-    const contract = getContract()
-    if (!contract) {
-      setError('No signer available')
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
+    const contract = getReadContract();
+    if (!contract) return;
     try {
-      console.log('Loading offers from:', await contract.getAddress())
-      const offerCount = await contract.offerCount()
-      console.log('Offer count:', Number(offerCount))
-
-      if (Number(offerCount) === 0) {
-        setOffers([])
-        setIsLoading(false)
-        return
-      }
-
-      const loadedOffers: DelegationOffer[] = []
-
-      for (let i = 0; i < Number(offerCount); i++) {
+      const count = Number(await contract.offerCount());
+      const now = Math.floor(Date.now() / 1000);
+      const loaded: Offer[] = [];
+      for (let i = 0; i < count; i++) {
         try {
-          const offer = await contract.getOffer(i)
-          const status = await contract.getOfferStatus(i)
-          console.log(`Offer ${i}:`, offer)
-
-          loadedOffers.push({
+          const o = await contract.getOffer(i);
+          loaded.push({
             id: i,
-            delegator: offer[0],
-            maxAmount: offer[1],
-            availableAmount: offer[2],
-            yieldRate: offer[3],
-            minCreditScore: offer[4],
-            status: Number(status),
-            activeBonds: Number(offer[5]),
-            maxBonds: Number(offer[6]),
-          })
-        } catch (offerErr: any) {
-          console.error(`Failed to load offer ${i}:`, offerErr)
-        }
+            delegator: o[0],
+            maxAmount: BigInt(o[1]),
+            yieldRate: BigInt(o[2]),
+            minScore: BigInt(o[3]),
+            available: BigInt(o[4]),
+            activeBonds: Number(o[5]),
+            maxBonds: Number(o[6]),
+            status: Number(o[7]),
+            statusLabel: getOfferStatusLabel(Number(o[7])),
+          });
+        } catch {}
       }
-
-      setOffers(loadedOffers)
+      setOffers(loaded);
     } catch (err: any) {
-      console.error('Failed to load offers:', err)
-      setError(err.message || 'Failed to load offers')
-    } finally {
-      setIsLoading(false)
+      console.error("loadOffers error:", err);
     }
-  }, [getContract])
+  }, [getReadContract]);
 
+  // ── Load user's own offers ────────────────────────────────────────────────
+  const loadMyOffers = useCallback(async () => {
+    if (!address) return;
+    const contract = getReadContract();
+    if (!contract) return;
+    try {
+      const ids: bigint[] = await contract.getDelegatorOffers(address);
+      const loaded: Offer[] = [];
+      for (const id of ids) {
+        try {
+          const o = await contract.getOffer(id);
+          loaded.push({
+            id: Number(id),
+            delegator: o[0],
+            maxAmount: BigInt(o[1]),
+            yieldRate: BigInt(o[2]),
+            minScore: BigInt(o[3]),
+            available: BigInt(o[4]),
+            activeBonds: Number(o[5]),
+            maxBonds: Number(o[6]),
+            status: Number(o[7]),
+            statusLabel: getOfferStatusLabel(Number(o[7])),
+          });
+        } catch {}
+      }
+      setMyOffers(loaded);
+    } catch (err: any) {
+      console.error("loadMyOffers error:", err);
+    }
+  }, [address, getReadContract]);
+
+  // ── Load user's bonds ─────────────────────────────────────────────────────
+  const loadMyBonds = useCallback(async () => {
+    if (!address) return;
+    const contract = getReadContract();
+    if (!contract) return;
+    try {
+      const ids: bigint[] = await contract.getBorrowerBonds(address);
+      const now = Math.floor(Date.now() / 1000);
+      const loaded: Bond[] = [];
+      for (const id of ids) {
+        try {
+          const b = await contract.getBond(id);
+          const isV2 = ADDRESSES.isV2Delegation;
+          // V2 getBond returns 9 values; V1 returns 7
+          const status = Number(isV2 ? b[8] : b[6]);
+          const dueDate = isV2 ? BigInt(b[7]) : 0n;
+          const isExpired = isV2 && status === 0 && Number(dueDate) > 0 && Number(dueDate) < now;
+
+          loaded.push({
+            id: Number(id),
+            delegator: b[0],
+            borrower: b[1],
+            amount: BigInt(b[2]),
+            repaid: BigInt(b[3]),
+            yieldEarned: BigInt(b[4]),
+            yieldPaidOut: isV2 ? BigInt(b[5]) : 0n,
+            yieldRate: BigInt(isV2 ? b[6] : b[5]),
+            dueDate,
+            status,
+            statusLabel: getBondStatusLabel(status),
+            isExpired,
+          });
+        } catch {}
+      }
+      setMyBonds(loaded);
+    } catch (err: any) {
+      console.error("loadMyBonds error:", err);
+    }
+  }, [address, getReadContract]);
+
+  // ── Transactions ──────────────────────────────────────────────────────────
   const createOffer = useCallback(async (
-    maxAmount: bigint,
-    yieldRate: bigint,
-    minCreditScore: bigint,
+    maxAmountEth: string,
+    yieldRateBps: number,
+    minScore: number,
     maxBonds: number
   ) => {
-    const contract = getContract()
-    if (!contract) return null
-
-    setIsLoading(true)
-    setError(null)
+    const contract = getContract();
+    if (!contract) return;
+    setLoading(true); setError(null); setTxHash(null);
     try {
-      const tx = await contract.createOffer(maxAmount, yieldRate, minCreditScore, maxBonds)
-      await tx.wait()
-      await loadOffers()
-      return tx
+      const tx = await contract.createOffer(
+        ethers.parseEther(maxAmountEth),
+        BigInt(yieldRateBps),
+        BigInt(minScore),
+        BigInt(maxBonds)
+      );
+      setTxHash(tx.hash);
+      await tx.wait();
+      await Promise.all([loadOffers(), loadMyOffers()]);
     } catch (err: any) {
-      setError(err.message)
-      return null
-    } finally {
-      setIsLoading(false)
-    }
-  }, [getContract, loadOffers])
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract, loadOffers, loadMyOffers]);
+
+  const cancelOffer = useCallback(async (offerId: number) => {
+    const contract = getContract();
+    if (!contract) return;
+    setLoading(true); setError(null); setTxHash(null);
+    try {
+      const tx = await contract.cancelOffer(offerId);
+      setTxHash(tx.hash);
+      await tx.wait();
+      await Promise.all([loadOffers(), loadMyOffers()]);
+    } catch (err: any) {
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract, loadOffers, loadMyOffers]);
 
   const acceptOffer = useCallback(async (
     offerId: number,
-    amount: bigint,
-    duration: number
+    amountEth: string,
+    durationDays: number
   ) => {
-    const contract = getContract()
-    if (!contract) return null
-
-    setIsLoading(true)
-    setError(null)
+    const contract = getContract();
+    if (!contract) return;
+    setLoading(true); setError(null); setTxHash(null);
     try {
-      const tx = await contract.acceptOffer(offerId, amount, duration)
-      await tx.wait()
-      await loadOffers()
-      return tx
+      const durationSecs = durationDays * 24 * 60 * 60;
+      const tx = await contract.acceptOffer(offerId, ethers.parseEther(amountEth), durationSecs);
+      setTxHash(tx.hash);
+      await tx.wait();
+      await Promise.all([loadOffers(), loadMyBonds()]);
     } catch (err: any) {
-      setError(err.message)
-      return null
-    } finally {
-      setIsLoading(false)
-    }
-  }, [getContract, loadOffers])
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract, loadOffers, loadMyBonds]);
 
-  const cancelOffer = useCallback(async (offerId: number) => {
-    const contract = getContract()
-    if (!contract) return null
-
-    setIsLoading(true)
-    setError(null)
+  const repayBond = useCallback(async (bondId: number, amountEth: string) => {
+    const contract = getContract();
+    if (!contract) return;
+    setLoading(true); setError(null); setTxHash(null);
     try {
-      const tx = await contract.cancelOffer(offerId)
-      await tx.wait()
-      await loadOffers()
-      return tx
+      const tx = await contract.repayBond(bondId, { value: ethers.parseEther(amountEth) });
+      setTxHash(tx.hash);
+      await tx.wait();
+      await Promise.all([loadOffers(), loadMyBonds()]);
     } catch (err: any) {
-      setError(err.message)
-      return null
-    } finally {
-      setIsLoading(false)
-    }
-  }, [getContract, loadOffers])
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract, loadOffers, loadMyBonds]);
 
-  const getUserOffers = useCallback(async (): Promise<number[] | null> => {
-    const contract = getContract()
-    if (!contract || !address) return null
-
+  // V2: mark expired bond as defaulted (permissionless)
+  const markExpiredDefault = useCallback(async (bondId: number) => {
+    if (!ADDRESSES.isV2Delegation) return;
+    const contract = getContract();
+    if (!contract) return;
+    setLoading(true); setError(null); setTxHash(null);
     try {
-      return await contract.getDelegatorOffers(address)
+      const tx = await contract.markExpiredDefault(bondId);
+      setTxHash(tx.hash);
+      await tx.wait();
+      await loadMyBonds();
     } catch (err: any) {
-      console.error('Failed to get user offers:', err)
-      return null
-    }
-  }, [getContract, address])
-
-  const getUserBonds = useCallback(async (): Promise<number[] | null> => {
-    const contract = getContract()
-    if (!contract || !address) return null
-
-    try {
-      return await contract.getBorrowerBonds(address)
-    } catch (err: any) {
-      console.error('Failed to get user bonds:', err)
-      return null
-    }
-  }, [getContract, address])
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract, loadMyBonds]);
 
   return {
     offers,
-    totalDelegated,
-    loadOffers,
-    createOffer,
-    acceptOffer,
-    cancelOffer,
-    getUserOffers,
-    getUserBonds,
-    isLoading,
+    myOffers,
+    myBonds,
+    loading,
     error,
+    txHash,
+    loadOffers,
+    loadMyOffers,
+    loadMyBonds,
+    createOffer,
+    cancelOffer,
+    acceptOffer,
+    repayBond,
+    markExpiredDefault,
     clearError: () => setError(null),
-  }
+    isV2: ADDRESSES.isV2Delegation,
+  };
 }

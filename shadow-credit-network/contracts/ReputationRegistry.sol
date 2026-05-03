@@ -627,4 +627,46 @@ contract ReputationRegistry is Ownable {
     function getVerifierAtIndex(uint256 _index) external view returns (address) {
         return verifierList[_index];
     }
+
+    // ──────────────────────────────────────────────
+    //  Wave 3: Protocol Activity Hook
+    //
+    //  Called by EncryptedCreditEngineV3, PrivateLoanPoolV3, and CreditDelegationV2
+    //  after protocol events (score computation, repayment, default).
+    //  Updates ProtocolInteraction factor with a trivially-encrypted high score
+    //  to signal active protocol participation.
+    //
+    //  Only callable by registered integration contracts.
+    //  Silently no-ops if the user is not registered in the reputation system.
+    // ──────────────────────────────────────────────
+
+    event ActivityNotified(address indexed user, address indexed caller);
+
+    /// @notice Notify the registry that a user performed a protocol action.
+    /// @dev Uses trivial encryption (FHE.asEuint32) for the activity score.
+    ///      This is intentional — the value (8000 bps = 80% activity) is not
+    ///      sensitive. Only the composite score (which blends all factors) is private.
+    function notifyActivity(address _user) external {
+        // Only authorized integration contracts can call this
+        if (!integrationContracts[msg.sender]) revert NotIntegrationContract();
+
+        // Silently skip if user is not registered
+        if (!profiles[_user].isActive) return;
+
+        // Update ProtocolInteraction factor (index 3) with a high activity score
+        uint256 factorIndex = uint256(ReputationFactor.ProtocolInteraction);
+        euint32 activityScore = FHE.asEuint32(8000); // 80% — signals active use
+
+        profiles[_user].factors[factorIndex].score = activityScore;
+        profiles[_user].factors[factorIndex].lastUpdated = block.timestamp;
+        profiles[_user].lastActivityAt = block.timestamp;
+
+        FHE.allowThis(activityScore);
+        FHE.allow(activityScore, _user);
+
+        _recomputeCompositeScore(_user);
+
+        emit ActivityNotified(_user, msg.sender);
+        emit ReputationUpdated(_user, ReputationFactor.ProtocolInteraction, euint32.unwrap(activityScore));
+    }
 }

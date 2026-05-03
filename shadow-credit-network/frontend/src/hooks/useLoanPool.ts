@@ -3,6 +3,9 @@ import { ethers } from "ethers";
 import { useWallet } from "@/lib/wallet";
 import { getLoanPoolContract, parseContractError, getLoanStatusLabel, ADDRESSES } from "@/lib/contracts";
 
+// CoFHE-enabled networks — FHE.gte() / FHE.decrypt() only work here
+const COFHE_CHAIN_IDS = new Set([8008135, 412346]); // Fhenix Helium, localcofhe
+
 export interface PoolState {
   totalLiquidity: bigint;
   availableLiquidity: bigint;
@@ -44,7 +47,8 @@ const DEFAULT_POOL: PoolState = {
 };
 
 export function useLoanPool() {
-  const { signer, provider, address } = useWallet();
+  const { signer, provider, address, chainId } = useWallet();
+  const isFHENetwork = chainId !== null && COFHE_CHAIN_IDS.has(chainId);
   const [poolState, setPoolState] = useState<PoolState>(DEFAULT_POOL);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(false);
@@ -214,6 +218,18 @@ export function useLoanPool() {
     durationDays: number,
     riskPool: number  // 0=Conservative, 1=Moderate, 2=Aggressive
   ) => {
+    // V3 requestLoan calls creditEngine.requestApprovalCheck() which calls
+    // FHE.gte() — this requires the CoFHE task manager. On Base Sepolia it
+    // reverts immediately. Block it here before the wallet popup fires.
+    if (ADDRESSES.isV3Pool && !isFHENetwork) {
+      setError(
+        "V3 loan approval uses FHE.gte() which requires a CoFHE-enabled network " +
+        "(Fhenix Helium or localcofhe). On Base Sepolia the transaction will revert. " +
+        "To demo borrowing: switch to Fhenix Helium, or fund and borrow on the Wave 1 pool " +
+        "at 0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69 which uses plaintext approval."
+      );
+      return;
+    }
     const contract = getContract();
     if (!contract) return;
     setLoading(true); setError(null); setTxHash(null);
@@ -226,7 +242,7 @@ export function useLoanPool() {
     } catch (err: any) {
       setError(parseContractError(err));
     } finally { setLoading(false); }
-  }, [getContract, loadPoolState, loadLoans]);
+  }, [getContract, loadPoolState, loadLoans, isFHENetwork]);
 
   // V3: poll FHE approval result — call repeatedly until ready
   const resolveLoanApproval = useCallback(async (loanId: number) => {
@@ -290,5 +306,6 @@ export function useLoanPool() {
     refinanceLoan,
     clearError: () => setError(null),
     isV3: ADDRESSES.isV3Pool,
+    isFHENetwork,
   };
 }

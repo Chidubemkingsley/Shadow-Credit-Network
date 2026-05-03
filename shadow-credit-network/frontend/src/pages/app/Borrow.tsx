@@ -2,17 +2,102 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
 import { useWallet } from "@/lib/wallet";
 import { useLoanPool } from "@/hooks/useLoanPool";
 import { useCreditEngine } from "@/hooks/useCreditEngine";
-import { ADDRESSES } from "@/lib/contracts";
+import { ADDRESSES, getLoanPoolContract, parseContractError, getLoanStatusLabel } from "@/lib/contracts";
 import {
   AlertTriangle, CheckCircle2, Loader2, RefreshCw,
-  TrendingUp, ArrowRight, Clock,
+  TrendingUp, ArrowRight, Clock, FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// ── Wave 1 demo pool (Base Sepolia, plaintext approval, no FHE) ───────────────
+const W1_POOL_ADDRESS = import.meta.env.VITE_LOAN_POOL_ADDRESS ?? "0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69";
+
+function useDemoPool() {
+  const { signer, provider, address } = useWallet();
+  const [demoLoans, setDemoLoans] = useState<any[]>([]);
+  const [demoPool, setDemoPool] = useState({ total: 0n, available: 0n, deposit: 0n });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+
+  // Use Wave 1 ABI directly — same requestLoan signature, different getLoan return
+  const W1_ABI = [
+    "function fundPool() external payable",
+    "function withdrawFunds(uint256 amount) external",
+    "function requestLoan(uint256 principal, uint256 duration, uint8 riskPool) external",
+    "function repayLoan(uint256 loanId) external payable",
+    "function getLoan(uint256) external view returns (address borrower, uint256 principal, uint256 interestRate, uint256 repaidAmount, uint256 totalOwed, uint256 status, uint256 dueDate, bool creditVerified, bool creditPassed)",
+    "function getBorrowerLoans(address) external view returns (uint256[])",
+    "function getLenderDeposit(address) external view returns (uint256 amount, uint256 depositedAt)",
+    "function totalPoolLiquidity() external view returns (uint256)",
+    "function getAvailableLiquidity() external view returns (uint256)",
+    "function loanCount() external view returns (uint256)",
+  ];
+
+  const getRC = useCallback(() => provider ? new ethers.Contract(W1_POOL_ADDRESS, W1_ABI, provider) : null, [provider]);
+  const getSC = useCallback(() => signer  ? new ethers.Contract(W1_POOL_ADDRESS, W1_ABI, signer)   : null, [signer]);
+
+  const load = useCallback(async () => {
+    const rc = getRC(); if (!rc) return;
+    try {
+      const [total, available] = await Promise.all([rc.totalPoolLiquidity(), rc.getAvailableLiquidity()]);
+      let deposit = 0n;
+      if (address) { try { const [d] = await rc.getLenderDeposit(address); deposit = d; } catch {} }
+      setDemoPool({ total, available, deposit });
+
+      if (address) {
+        const ids: bigint[] = await rc.getBorrowerLoans(address);
+        const now = Math.floor(Date.now() / 1000);
+        const loaded = await Promise.all(ids.map(async (id) => {
+          const l = await rc.getLoan(id);
+          const status = Number(l[5]);
+          const dueDate = BigInt(l[6] ?? 0);
+          return {
+            id: Number(id), principal: BigInt(l[1]), totalOwed: BigInt(l[4]),
+            repaidAmount: BigInt(l[3]), dueDate, status,
+            statusLabel: getLoanStatusLabel(status),
+            isOverdue: status === 1 && Number(dueDate) > 0 && Number(dueDate) < now,
+          };
+        }));
+        setDemoLoans(loaded);
+      }
+    } catch (e) { console.error("demo load", e); }
+  }, [address, getRC]);
+
+  const fund = useCallback(async (eth: string) => {
+    const sc = getSC(); if (!sc) return;
+    setLoading(true); setError(null); setTxHash(null);
+    try {
+      const tx = await sc.fundPool({ value: ethers.parseEther(eth) });
+      setTxHash(tx.hash); await tx.wait(); await load();
+    } catch (e: any) { setError(parseContractError(e)); } finally { setLoading(false); }
+  }, [getSC, load]);
+
+  const borrow = useCallback(async (eth: string, days: number, pool: number) => {
+    const sc = getSC(); if (!sc) return;
+    setLoading(true); setError(null); setTxHash(null);
+    try {
+      const tx = await sc.requestLoan(ethers.parseEther(eth), days * 86400, pool);
+      setTxHash(tx.hash); await tx.wait(); await load();
+    } catch (e: any) { setError(parseContractError(e)); } finally { setLoading(false); }
+  }, [getSC, load]);
+
+  const repay = useCallback(async (loanId: number, eth: string) => {
+    const sc = getSC(); if (!sc) return;
+    setLoading(true); setError(null); setTxHash(null);
+    try {
+      const tx = await sc.repayLoan(loanId, { value: ethers.parseEther(eth) });
+      setTxHash(tx.hash); await tx.wait(); await load();
+    } catch (e: any) { setError(parseContractError(e)); } finally { setLoading(false); }
+  }, [getSC, load]);
+
+  return { demoLoans, demoPool, loading, error, txHash, load, fund, borrow, repay, clearError: () => setError(null) };
+}
 
 const POOLS = [
   { id: 0, name: "Conservative", apr: "3%",  minScore: 740, maxDays: 90,  color: "border-success/30 bg-success/5",         badge: "text-success" },
@@ -40,9 +125,16 @@ export default function Borrow() {
     poolState, loans, loading, error, txHash,
     loadPoolState, loadLoans, fundPool, withdrawFunds, claimYield,
     requestLoan, resolveLoanApproval, repayLoan, refinanceLoan,
-    clearError, isV3,
+    clearError, isV3, isFHENetwork,
   } = useLoanPool();
   const { profile, loadProfile } = useCreditEngine();
+  const demo = useDemoPool();
+
+  // Demo mode: use Wave 1 pool on Base Sepolia when V3 FHE isn't available
+  const canUseDemoMode = isV3 && !isFHENetwork;
+  const [demoMode, setDemoMode] = useState(false);
+  // Auto-enable demo mode when on Base Sepolia + V3
+  useEffect(() => { if (canUseDemoMode) setDemoMode(true); }, [canUseDemoMode]);
 
   const [fundAmount, setFundAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -53,15 +145,14 @@ export default function Borrow() {
   const [repayAmount, setRepayAmount] = useState("");
   const [refinanceId, setRefinanceId] = useState<number | null>(null);
   const [refinancePool, setRefinancePool] = useState(0);
-  const [activeTab, setActiveTab] = useState("lend"); // Default to Lend so users fund first
+  const [activeTab, setActiveTab] = useState("lend");
 
   useEffect(() => {
     if (isConnected && address) {
-      loadPoolState();
-      loadLoans();
-      loadProfile();
+      loadPoolState(); loadLoans(); loadProfile();
+      if (canUseDemoMode) demo.load();
     }
-  }, [isConnected, address, loadPoolState, loadLoans, loadProfile]);
+  }, [isConnected, address]);
 
   if (!isConnected) {
     return (
@@ -75,17 +166,40 @@ export default function Borrow() {
     );
   }
 
-  const availableEth = Number(ethers.formatEther(poolState.availableLiquidity));
-  const totalEth = Number(ethers.formatEther(poolState.totalLiquidity));
-  const depositEth = Number(ethers.formatEther(poolState.lenderDeposit));
-  const yieldEth = Number(ethers.formatEther(poolState.lenderYieldEarned));
-  const activeLoans = loans.filter((l) => l.status === 1);
-  const pendingLoans = loans.filter((l) => l.status === 0);
-  const repaidLoans = loans.filter((l) => l.status === 2);
+  // Active data source — demo mode uses Wave 1 pool, normal uses V3
+  const activeLoading = demoMode ? demo.loading : loading;
+  const activeError   = demoMode ? demo.error   : error;
+  const activeTxHash  = demoMode ? demo.txHash  : txHash;
+  const activeClear   = demoMode ? demo.clearError : clearError;
 
+  const availableEth = demoMode
+    ? Number(ethers.formatEther(demo.demoPool.available))
+    : Number(ethers.formatEther(poolState.availableLiquidity));
+  const totalEth = demoMode
+    ? Number(ethers.formatEther(demo.demoPool.total))
+    : Number(ethers.formatEther(poolState.totalLiquidity));
+  const depositEth = demoMode
+    ? Number(ethers.formatEther(demo.demoPool.deposit))
+    : Number(ethers.formatEther(poolState.lenderDeposit));
+  const yieldEth = Number(ethers.formatEther(poolState.lenderYieldEarned));
+
+  const activeLoans  = (demoMode ? demo.demoLoans : loans).filter((l) => l.status === 1);
+  const pendingLoans = (demoMode ? demo.demoLoans : loans).filter((l) => l.status === 0);
+  const repaidLoans  = (demoMode ? demo.demoLoans : loans).filter((l) => l.status === 2);
+  const allLoans     = demoMode ? demo.demoLoans : loans;
+
+  const handleFund    = (eth: string) => demoMode ? demo.fund(eth)   : fundPool(eth);
+  const handleWithdraw = (eth: string) => demoMode ? Promise.resolve() : withdrawFunds(eth);
   const handleRequestLoan = async () => {
-    await requestLoan(loanAmount, Number(loanDays), selectedPool);
+    if (demoMode) { await demo.borrow(loanAmount, Number(loanDays), selectedPool); }
+    else          { await requestLoan(loanAmount, Number(loanDays), selectedPool); }
     setActiveTab("loans");
+  };
+  const handleRepay = (id: number, eth: string) =>
+    demoMode ? demo.repay(id, eth) : repayLoan(id, eth);
+  const handleRefresh = () => {
+    if (demoMode) { demo.load(); loadProfile(); }
+    else          { loadPoolState(); loadLoans(); }
   };
 
   return (
@@ -95,21 +209,58 @@ export default function Borrow() {
         <div>
           <h1 className="text-3xl font-bold font-heading">Lending & Borrowing</h1>
           <p className="text-muted-foreground mt-1">
-            {isV3 ? "V3 Pool — ebool-gated approval · lender yield · refinancing" : "Fund pools or borrow from risk-tiered liquidity"}
+            {demoMode
+              ? "Demo Mode — Wave 1 pool · plaintext approval · instant disburse"
+              : isV3 ? "V3 Pool — ebool-gated approval · lender yield · refinancing"
+              : "Fund pools or borrow from risk-tiered liquidity"}
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => { loadPoolState(); loadLoans(); }} disabled={loading}>
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {canUseDemoMode && (
+            <button
+              onClick={() => setDemoMode((d) => !d)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition-colors",
+                demoMode
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "bg-muted border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <FlaskConical className="w-3 h-3" />
+              {demoMode ? "Demo Mode ON" : "Demo Mode"}
+            </button>
+          )}
+          <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={activeLoading}>
+            <RefreshCw className={cn("w-4 h-4", activeLoading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
+
+      {/* Demo mode banner */}
+      {demoMode && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="glass rounded-xl p-4 border border-primary/30 flex items-start gap-3">
+          <FlaskConical className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1 text-xs space-y-1">
+            <div className="font-semibold text-primary">Demo Mode — Wave 1 Pool (Base Sepolia)</div>
+            <p className="text-muted-foreground">
+              Using <code className="bg-muted px-1 rounded">PrivateLoanPool</code> at{" "}
+              <code className="bg-muted px-1 rounded font-mono">{W1_POOL_ADDRESS.slice(0, 10)}…</code>.
+              Approval is instant and plaintext — no FHE required. Fund the pool below, then borrow.
+              Toggle off to see the V3 FHE pool.
+            </p>
+          </div>
+          <button onClick={() => setDemoMode(false)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+        </motion.div>
+      )}
 
       {/* Pool stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Total Pool", value: `${totalEth.toFixed(4)} ETH`, color: "" },
-          { label: "Available", value: `${availableEth.toFixed(4)} ETH`, color: "text-primary" },
-          { label: "Your Deposit", value: `${depositEth.toFixed(4)} ETH`, color: "" },
-          { label: "Active Loans", value: String(activeLoans.length), color: "text-success" },
+          { label: "Total Pool",    value: `${totalEth.toFixed(4)} ETH`,    color: "" },
+          { label: "Available",     value: `${availableEth.toFixed(4)} ETH`, color: "text-primary" },
+          { label: "Your Deposit",  value: `${depositEth.toFixed(4)} ETH`,  color: "" },
+          { label: "Active Loans",  value: String(activeLoans.length),       color: "text-success" },
         ].map((s) => (
           <div key={s.label} className="glass rounded-xl p-3">
             <div className="text-xs text-muted-foreground">{s.label}</div>
@@ -118,25 +269,18 @@ export default function Borrow() {
         ))}
       </div>
 
-      {/* Empty pool banner — shown when pool has no liquidity */}
+      {/* Empty pool banner */}
       {totalEth === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-xl p-4 border border-warning/40 flex items-start gap-3"
-        >
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="glass rounded-xl p-4 border border-warning/40 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-warning mt-0.5 shrink-0" />
           <div className="flex-1 space-y-2">
             <div className="font-semibold text-sm text-warning">Pool is empty — fund it before borrowing</div>
             <p className="text-xs text-muted-foreground">
-              The lending pool at <code className="bg-muted px-1 rounded font-mono">0x9227…1913</code> has 0 ETH.
               Go to the <strong>Lend</strong> tab and deposit ETH first (minimum 0.01 ETH).
-              Once funded, you can request a loan.
             </p>
-            <Button
-              size="sm"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1 text-xs"
-              onClick={() => setActiveTab("lend")}
-            >
+            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1 text-xs"
+              onClick={() => setActiveTab("lend")}>
               Go to Lend tab <ArrowRight className="w-3 h-3" />
             </Button>
           </div>
@@ -145,22 +289,21 @@ export default function Borrow() {
 
       {/* Error / tx */}
       <AnimatePresence>
-        {error && (
+        {activeError && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="glass rounded-xl p-4 border border-destructive/30 flex items-start gap-3">
             <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
-            <div className="flex-1 text-sm text-destructive">{error}</div>
-            <button onClick={clearError} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+            <div className="flex-1 text-sm text-destructive">{activeError}</div>
+            <button onClick={activeClear} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
           </motion.div>
         )}
-        {txHash && !error && (
+        {activeTxHash && !activeError && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="glass rounded-xl p-3 border border-success/30 flex items-center gap-2 text-xs text-success">
             <CheckCircle2 className="w-4 h-4" />
             Transaction confirmed:
-            <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
-              {txHash.slice(0, 20)}…
-            </a>
+            <a href={`https://sepolia.basescan.org/tx/${activeTxHash}`} target="_blank" rel="noreferrer"
+              className="underline font-mono text-primary">{activeTxHash.slice(0, 20)}…</a>
           </motion.div>
         )}
       </AnimatePresence>
@@ -171,9 +314,9 @@ export default function Borrow() {
           <TabsTrigger value="lend">Lend</TabsTrigger>
           <TabsTrigger value="loans">
             My Loans
-            {loans.length > 0 && (
+            {allLoans.length > 0 && (
               <span className="ml-1.5 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-                {loans.length}
+                {allLoans.length}
               </span>
             )}
           </TabsTrigger>
@@ -181,7 +324,7 @@ export default function Borrow() {
 
         {/* ── Borrow ── */}
         <TabsContent value="borrow" className="space-y-4 mt-6">
-          {profile.isScoreStale && isV3 && (
+          {profile.isScoreStale && isV3 && !demoMode && (
             <div className="glass rounded-xl p-3 border border-warning/30 flex items-center gap-2 text-xs text-warning">
               <AlertTriangle className="w-4 h-4" />
               Your credit score is stale (180+ days). Recompute before requesting a loan.
@@ -191,16 +334,10 @@ export default function Borrow() {
           {/* Pool selector */}
           <div className="grid md:grid-cols-3 gap-4">
             {POOLS.map((pool) => (
-              <motion.div
-                key={pool.id}
-                whileHover={{ scale: 1.02 }}
+              <motion.div key={pool.id} whileHover={{ scale: 1.02 }}
                 onClick={() => setSelectedPool(pool.id)}
-                className={cn(
-                  "glass rounded-2xl p-5 border cursor-pointer transition-all",
-                  pool.color,
-                  selectedPool === pool.id && "ring-2 ring-primary"
-                )}
-              >
+                className={cn("glass rounded-2xl p-5 border cursor-pointer transition-all",
+                  pool.color, selectedPool === pool.id && "ring-2 ring-primary")}>
                 <h3 className="font-heading font-bold mb-3">{pool.name}</h3>
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between">
@@ -224,36 +361,25 @@ export default function Borrow() {
           <div className="glass rounded-2xl p-6 space-y-4">
             <h3 className="font-heading font-semibold">
               Request Loan — {POOLS[selectedPool].name} Pool
+              {demoMode && <span className="ml-2 text-xs text-primary font-normal">(Demo · Wave 1)</span>}
             </h3>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">Amount (ETH)</label>
-                <Input
-                  type="number"
-                  placeholder={`Max: ${availableEth.toFixed(4)} ETH`}
-                  value={loanAmount}
-                  onChange={(e) => setLoanAmount(e.target.value)}
-                  className="bg-muted"
-                  min="0.01"
-                  step="0.01"
-                />
+                <Input type="number" placeholder={`Max: ${availableEth.toFixed(4)} ETH`}
+                  value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)}
+                  className="bg-muted" min="0.01" step="0.01" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">
                   Duration (days, max {POOLS[selectedPool].maxDays})
                 </label>
-                <Input
-                  type="number"
-                  value={loanDays}
-                  onChange={(e) => setLoanDays(e.target.value)}
-                  className="bg-muted"
-                  min="1"
-                  max={POOLS[selectedPool].maxDays}
-                />
+                <Input type="number" value={loanDays} onChange={(e) => setLoanDays(e.target.value)}
+                  className="bg-muted" min="1" max={POOLS[selectedPool].maxDays} />
               </div>
             </div>
 
-            {!profile.hasCreditScore && (
+            {!profile.hasCreditScore && !demoMode && (
               <div className="text-xs text-warning flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
                 You need a computed credit score to request a loan.
@@ -262,42 +388,42 @@ export default function Borrow() {
 
             <Button
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-              disabled={loading || !loanAmount || availableEth === 0 || !profile.hasCreditScore}
+              disabled={activeLoading || !loanAmount || availableEth === 0 || (!demoMode && !profile.hasCreditScore)}
               onClick={handleRequestLoan}
             >
-              {loading
+              {activeLoading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming in wallet…</>
-                : !profile.hasCreditScore
+                : !profile.hasCreditScore && !demoMode
                 ? "Compute Credit Score First"
                 : availableEth === 0
                 ? "Pool Empty — Fund it in the Lend tab first"
+                : demoMode
+                ? <><FlaskConical className="w-4 h-4" /> Request Loan (Demo)</>
                 : <>Request Loan <ArrowRight className="w-4 h-4" /></>
               }
             </Button>
 
             <p className="text-xs text-muted-foreground text-center">
-              {isV3
-                ? "⚠ V3 FHE approval requires Fhenix Helium network. On Base Sepolia, requestLoan() will revert when calling FHE.gte(). Fund the pool and test on localcofhe or Fhenix Helium for full flow."
-                : "V1: Auto-approved if your score meets the pool threshold."}
+              {demoMode
+                ? "Wave 1 pool — plaintext approval, instant disburse. No FHE required."
+                : isV3 && isFHENetwork
+                ? "FHE approval: score compared via ebool — ETH disbursed only when approved."
+                : "Switch to Demo Mode or Fhenix Helium for full borrow flow."}
             </p>
           </div>
         </TabsContent>
 
         {/* ── Lend ── */}
         <TabsContent value="lend" className="space-y-6 mt-6">
-          {/* Yield card (V3 only) */}
-          {isV3 && yieldEth > 0 && (
+          {!demoMode && isV3 && yieldEth > 0 && (
             <div className="glass rounded-2xl p-5 border border-success/20 flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Accrued Yield</div>
                 <div className="text-2xl font-bold font-heading text-success mt-0.5">{yieldEth.toFixed(6)} ETH</div>
                 <div className="text-xs text-muted-foreground mt-1">From proportional interest distribution</div>
               </div>
-              <Button
-                className="bg-success/10 text-success hover:bg-success/20 border border-success/30 gap-2"
-                onClick={claimYield}
-                disabled={loading}
-              >
+              <Button className="bg-success/10 text-success hover:bg-success/20 border border-success/30 gap-2"
+                onClick={claimYield} disabled={loading}>
                 <TrendingUp className="w-4 h-4" />
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Claim Yield"}
               </Button>
@@ -305,55 +431,35 @@ export default function Borrow() {
           )}
 
           <div className="grid md:grid-cols-2 gap-4">
-            {/* Fund */}
             <div className="glass rounded-2xl p-6 space-y-3">
               <h3 className="font-heading font-semibold">Fund Pool</h3>
               <p className="text-xs text-muted-foreground">
-                {isV3
-                  ? "Earn proportional yield when borrowers repay interest."
+                {demoMode ? "Fund the Wave 1 demo pool to enable borrowing."
+                  : isV3 ? "Earn proportional yield when borrowers repay interest."
                   : "Provide liquidity for borrowers."}
               </p>
-              <Input
-                type="number"
-                placeholder="Amount in ETH (min 0.01)"
-                value={fundAmount}
-                onChange={(e) => setFundAmount(e.target.value)}
-                className="bg-muted"
-                min="0.01"
-                step="0.01"
-              />
-              <Button
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={loading || !fundAmount}
-                onClick={() => fundPool(fundAmount)}
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Fund Pool
+              <Input type="number" placeholder="Amount in ETH (min 0.01)"
+                value={fundAmount} onChange={(e) => setFundAmount(e.target.value)}
+                className="bg-muted" min="0.01" step="0.01" />
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={activeLoading || !fundAmount} onClick={() => handleFund(fundAmount)}>
+                {activeLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Fund Pool {demoMode && "(Demo)"}
               </Button>
             </div>
 
-            {/* Withdraw */}
             <div className="glass rounded-2xl p-6 space-y-3">
               <h3 className="font-heading font-semibold">Withdraw</h3>
               <p className="text-xs text-muted-foreground">
                 Your deposit: <span className="text-foreground font-semibold">{depositEth.toFixed(4)} ETH</span>
               </p>
-              <Input
-                type="number"
-                placeholder={`Max: ${depositEth.toFixed(4)} ETH`}
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="bg-muted"
-                min="0.01"
-                step="0.01"
-              />
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={loading || !withdrawAmount || depositEth === 0}
-                onClick={() => withdrawFunds(withdrawAmount)}
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              <Input type="number" placeholder={`Max: ${depositEth.toFixed(4)} ETH`}
+                value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)}
+                className="bg-muted" min="0.01" step="0.01" />
+              <Button variant="outline" className="w-full"
+                disabled={activeLoading || !withdrawAmount || depositEth === 0}
+                onClick={() => handleWithdraw(withdrawAmount)}>
+                {activeLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Withdraw
               </Button>
             </div>
@@ -362,18 +468,17 @@ export default function Borrow() {
 
         {/* ── My Loans ── */}
         <TabsContent value="loans" className="mt-6 space-y-4">
-          {loans.length === 0 ? (
+          {allLoans.length === 0 ? (
             <div className="glass rounded-xl p-8 text-center text-muted-foreground">
               No loans yet. Request a loan from the Borrow tab.
             </div>
           ) : (
             <>
-              {/* Summary row */}
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: "Pending", count: pendingLoans.length, color: "text-muted-foreground" },
-                  { label: "Active", count: activeLoans.length, color: "text-primary" },
-                  { label: "Repaid", count: repaidLoans.length, color: "text-success" },
+                  { label: "Active",  count: activeLoans.length,  color: "text-primary" },
+                  { label: "Repaid",  count: repaidLoans.length,  color: "text-success" },
                 ].map((s) => (
                   <div key={s.label} className="glass rounded-xl p-3 text-center">
                     <div className={cn("text-xl font-bold font-heading", s.color)}>{s.count}</div>
@@ -382,31 +487,24 @@ export default function Borrow() {
                 ))}
               </div>
 
-              {/* Loan cards */}
               <div className="space-y-3">
-                {loans.map((loan) => {
+                {allLoans.map((loan) => {
                   const remaining = loan.totalOwed - loan.repaidAmount;
                   const progressPct = loan.totalOwed > 0n
-                    ? Number((loan.repaidAmount * 100n) / loan.totalOwed)
-                    : 0;
+                    ? Number((loan.repaidAmount * 100n) / loan.totalOwed) : 0;
 
                   return (
-                    <motion.div
-                      key={loan.id}
-                      layout
-                      className={cn(
-                        "glass rounded-xl p-5 border",
+                    <motion.div key={loan.id} layout
+                      className={cn("glass rounded-xl p-5 border",
                         loan.status === 1 && "border-primary/20",
                         loan.status === 2 && "border-success/20",
-                        loan.isOverdue && "border-destructive/30",
-                      )}
-                    >
+                        loan.isOverdue && "border-destructive/30")}>
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-2 flex-1 min-w-0">
-                          {/* Title row */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm">Loan #{loan.id}</span>
                             <StatusBadge status={loan.status} label={loan.statusLabel} />
+                            {demoMode && <span className="text-xs text-primary px-1.5 py-0.5 rounded-full bg-primary/10">Demo</span>}
                             {loan.isOverdue && (
                               <span className="text-xs text-destructive font-bold flex items-center gap-1">
                                 <Clock className="w-3 h-3" /> OVERDUE
@@ -414,7 +512,6 @@ export default function Borrow() {
                             )}
                           </div>
 
-                          {/* Amounts */}
                           <div className="text-xs text-muted-foreground space-y-0.5">
                             <div>Principal: <span className="text-foreground">{ethers.formatEther(loan.principal)} ETH</span></div>
                             <div>Total owed: <span className="text-foreground">{ethers.formatEther(loan.totalOwed)} ETH</span></div>
@@ -424,31 +521,25 @@ export default function Borrow() {
                             )}
                           </div>
 
-                          {/* Due date */}
                           {loan.dueDate > 0n && loan.status !== 2 && (
                             <div className="text-xs text-muted-foreground">
                               Due: {new Date(Number(loan.dueDate) * 1000).toLocaleDateString()}
                             </div>
                           )}
 
-                          {/* Repayment progress bar */}
                           {loan.status === 1 && (
                             <div className="space-y-1">
                               <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Repayment progress</span>
-                                <span>{progressPct}%</span>
+                                <span>Repayment progress</span><span>{progressPct}%</span>
                               </div>
                               <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-primary rounded-full transition-all duration-500"
-                                  style={{ width: `${progressPct}%` }}
-                                />
+                                <div className="h-full bg-primary rounded-full transition-all duration-500"
+                                  style={{ width: `${progressPct}%` }} />
                               </div>
                             </div>
                           )}
 
-                          {/* V3 FHE approval status */}
-                          {isV3 && loan.status === 0 && (
+                          {!demoMode && isV3 && loan.status === 0 && (
                             <div className="text-xs">
                               {loan.approvalResolved
                                 ? loan.approvalPassed
@@ -460,90 +551,59 @@ export default function Borrow() {
                           )}
                         </div>
 
-                        {/* Actions */}
                         <div className="flex flex-col gap-2 shrink-0">
-                          {/* Pending V3: poll approval */}
-                          {loan.status === 0 && isV3 && !loan.approvalResolved && (
-                            <Button
-                              size="sm" variant="outline" className="text-xs"
-                              onClick={() => resolveLoanApproval(loan.id)}
-                              disabled={loading}
-                            >
+                          {!demoMode && loan.status === 0 && isV3 && !loan.approvalResolved && (
+                            <Button size="sm" variant="outline" className="text-xs"
+                              onClick={() => resolveLoanApproval(loan.id)} disabled={loading}>
                               {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Poll Approval"}
                             </Button>
                           )}
 
-                          {/* Active: repay */}
                           {loan.status === 1 && (
                             repayId === loan.id ? (
                               <div className="flex gap-1">
-                                <Input
-                                  type="number"
-                                  className="w-24 h-8 text-xs"
-                                  value={repayAmount}
-                                  onChange={(e) => setRepayAmount(e.target.value)}
-                                  placeholder="ETH"
-                                />
-                                <Button
-                                  size="sm"
-                                  className="h-8 text-xs bg-primary text-primary-foreground"
-                                  onClick={() => repayLoan(loan.id, repayAmount)}
-                                  disabled={loading}
-                                >
-                                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "✓"}
+                                <Input type="number" className="w-24 h-8 text-xs"
+                                  value={repayAmount} onChange={(e) => setRepayAmount(e.target.value)}
+                                  placeholder="ETH" />
+                                <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground"
+                                  onClick={() => handleRepay(loan.id, repayAmount)} disabled={activeLoading}>
+                                  {activeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "✓"}
                                 </Button>
-                                <Button
-                                  size="sm" variant="ghost" className="h-8 text-xs"
-                                  onClick={() => { setRepayId(null); setRepayAmount(""); }}
-                                >✕</Button>
+                                <Button size="sm" variant="ghost" className="h-8 text-xs"
+                                  onClick={() => { setRepayId(null); setRepayAmount(""); }}>✕</Button>
                               </div>
                             ) : (
-                              <Button
-                                size="sm"
+                              <Button size="sm"
                                 className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                onClick={() => {
-                                  setRepayId(loan.id);
-                                  setRepayAmount(ethers.formatEther(remaining));
-                                }}
-                              >
+                                onClick={() => { setRepayId(loan.id); setRepayAmount(ethers.formatEther(remaining)); }}>
                                 Repay
                               </Button>
                             )
                           )}
 
-                          {/* Repaid badge */}
                           {loan.status === 2 && (
                             <div className="text-xs text-success flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" /> Repaid
                             </div>
                           )}
 
-                          {/* V3: refinance */}
-                          {loan.status === 1 && isV3 && (
+                          {!demoMode && loan.status === 1 && isV3 && (
                             refinanceId === loan.id ? (
                               <div className="flex gap-1">
-                                <select
-                                  className="h-8 text-xs bg-muted border border-border rounded px-1"
-                                  value={refinancePool}
-                                  onChange={(e) => setRefinancePool(Number(e.target.value))}
-                                >
+                                <select className="h-8 text-xs bg-muted border border-border rounded px-1"
+                                  value={refinancePool} onChange={(e) => setRefinancePool(Number(e.target.value))}>
                                   {POOLS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
-                                <Button
-                                  size="sm"
-                                  className="h-8 text-xs bg-primary text-primary-foreground"
-                                  onClick={() => refinanceLoan(loan.id, refinancePool)}
-                                  disabled={loading}
-                                >
+                                <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground"
+                                  onClick={() => refinanceLoan(loan.id, refinancePool)} disabled={loading}>
                                   Refi
                                 </Button>
-                                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setRefinanceId(null)}>✕</Button>
+                                <Button size="sm" variant="ghost" className="h-8 text-xs"
+                                  onClick={() => setRefinanceId(null)}>✕</Button>
                               </div>
                             ) : (
-                              <Button
-                                size="sm" variant="outline" className="text-xs"
-                                onClick={() => setRefinanceId(loan.id)}
-                              >
+                              <Button size="sm" variant="outline" className="text-xs"
+                                onClick={() => setRefinanceId(loan.id)}>
                                 Refinance
                               </Button>
                             )

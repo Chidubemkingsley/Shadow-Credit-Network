@@ -50,6 +50,18 @@ function fmtDate(ts: bigint) {
   return new Date(Number(ts) * 1000).toLocaleDateString();
 }
 
+function timeRemaining(targetTs: bigint, nowMs: number) {
+  const diff = Number(targetTs) * 1000 - nowMs;
+  if (diff <= 0) return "Ready";
+  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const m = Math.floor((diff / 1000 / 60) % 60);
+  const s = Math.floor((diff / 1000) % 60);
+  if (d > 0) return `${d}d ${h}h remaining`;
+  if (h > 0) return `${h}h ${m}m remaining`;
+  return `${m}m ${s}s remaining`;
+}
+
 const TIER_WEIGHTS = [
   { label: "Prime",        mult: "4×", color: "text-primary" },
   { label: "Near Prime",   mult: "3×", color: "text-blue-400" },
@@ -70,6 +82,13 @@ export default function Governance() {
   const [eligibility, setEligibility] = useState<{ eligible: boolean; weight: bigint; tier: number } | null>(null);
   const [canPropose, setCanPropose] = useState(false);
   const [form, setForm] = useState({ type: 0, description: "", param: "" });
+  const [now, setNow] = useState(Date.now());
+
+  // ── Tick for countdown ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // ── Read proposals from chain ──────────────────────────────────────────────
   const loadProposals = useCallback(async () => {
@@ -368,9 +387,13 @@ export default function Governance() {
                         {/* Finalize once voting period ends */}
                         {p.proposer.toLowerCase() === address?.toLowerCase() && (
                           <div className="flex items-center gap-2 w-full mt-2">
-                            <Button size="sm" variant="outline" className="text-xs" disabled={txLoading}
+                            <Button size="sm" variant="outline" className="text-xs" disabled={txLoading || now < Number(p.voteEnd) * 1000}
                               onClick={() => lifecycleAction("finalize", p.id)}>Finalize</Button>
-                            <span className="text-[10px] text-muted-foreground">Only proposer can finalize. Available 7 days after creation.</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {now < Number(p.voteEnd) * 1000 
+                                ? `Voting ends in ${timeRemaining(p.voteEnd, now)}` 
+                                : "Voting ended — ready to finalize"}
+                            </span>
                           </div>
                         )}
                       </>
@@ -387,10 +410,17 @@ export default function Governance() {
 
                   {/* Queued: Execute */}
                   {p.state === 3 && (
-                    <Button size="sm" className="gap-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-                      disabled={!isConnected || txLoading} onClick={() => lifecycleAction("execute", p.id)}>
-                      <CheckCircle className="w-4 h-4"/>Execute
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" className="gap-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                        disabled={!isConnected || txLoading || now < Number(p.executableAt) * 1000} onClick={() => lifecycleAction("execute", p.id)}>
+                        <CheckCircle className="w-4 h-4"/>Execute
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground">
+                        {now < Number(p.executableAt) * 1000 
+                          ? `Timelock: ${timeRemaining(p.executableAt, now)}` 
+                          : "Timelock expired — ready to execute"}
+                      </span>
+                    </div>
                   )}
 
                   {txLoading && <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground"/>}

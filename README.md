@@ -24,8 +24,6 @@
 |---|---|---|
 | `ScoreGatedGovernance` | `0x43bF2ac1909dFbBa952EDfd4aE119C9B37E882Fd` | [View](https://sepolia.basescan.org/address/0x43bF2ac1909dFbBa952EDfd4aE119C9B37E882Fd) |
 | `SoulboundCreditNFT` | `0x3494c525094bc9907443ad9D4311Cd87E76352F8` | [View](https://sepolia.basescan.org/address/0x3494c525094bc9907443ad9D4311Cd87E76352F8) |
-| `MultiAssetLoanPool` | *Pending Fhenix Helium deployment* | |
-| `CrossChainCreditBridge` | *Pending Fhenix Helium deployment* | |
 
 ### Wave 1 Reference
 | Contract | Address | Explorer |

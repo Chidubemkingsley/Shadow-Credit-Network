@@ -208,16 +208,6 @@ export default function Governance() {
         </div>
       )}
 
-      {/* FHE notice */}
-      <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.1 }}
-        className="flex items-start gap-3 p-4 rounded-xl border border-warning/20 bg-warning/5">
-        <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0"/>
-        <p className="text-sm text-muted-foreground">
-          Voting requires a <strong className="text-foreground">publicly decrypted credit score</strong>. Call{" "}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">requestScoreDecryption()</code> in Submit Data first. Stale scores cannot vote.
-        </p>
-      </motion.div>
-
       {/* Eligibility card */}
       <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.15 }}
         className="glass rounded-2xl p-6 grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -295,7 +285,7 @@ export default function Governance() {
             <Button variant="outline" onClick={() => setShowCreate(false)} disabled={txLoading}>Cancel</Button>
           </div>
           {!canPropose && isConnected && (
-            <p className="text-xs text-warning">You need a decrypted score ≥ 670 to propose.</p>
+            <p className="text-xs text-warning">You need a credit score ≥ 670 to propose.</p>
           )}
         </motion.div>
       )}
@@ -303,7 +293,10 @@ export default function Governance() {
       {/* Proposals list */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-lg">All Proposals</h2>
+          <div>
+            <h2 className="font-semibold text-lg">All Proposals</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">The voting window stays open for exactly 7 days.</p>
+          </div>
           <span className="text-xs text-muted-foreground">{loading ? "Loading…" : `${proposals.length} proposal${proposals.length !== 1 ? "s" : ""}`}</span>
         </div>
 
@@ -370,11 +363,16 @@ export default function Governance() {
                           disabled={!isConnected || !eligibility?.eligible || txLoading} onClick={() => castVote(p.id, false)}>
                           {txLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <XCircle className="w-4 h-4"/>}Vote Against
                         </Button>
-                        {!eligibility?.eligible && isConnected && <p className="text-xs text-muted-foreground">Decrypt your score to vote.</p>}
+                        {!eligibility?.eligible && isConnected && <p className="text-xs text-muted-foreground">Submit your credit data to vote.</p>}
                         {!isConnected && <p className="text-xs text-muted-foreground">Connect wallet to vote.</p>}
                         {/* Finalize once voting period ends */}
-                        <Button size="sm" variant="outline" className="text-xs" disabled={txLoading}
-                          onClick={() => lifecycleAction("finalize", p.id)}>Finalize</Button>
+                        {p.proposer.toLowerCase() === address?.toLowerCase() && (
+                          <div className="flex items-center gap-2 w-full mt-2">
+                            <Button size="sm" variant="outline" className="text-xs" disabled={txLoading}
+                              onClick={() => lifecycleAction("finalize", p.id)}>Finalize</Button>
+                            <span className="text-[10px] text-muted-foreground">Only proposer can finalize. Available 7 days after creation.</span>
+                          </div>
+                        )}
                       </>
                     )
                   )}

@@ -199,6 +199,18 @@ User
 
 ---
 
+## Score-Gated Governance Lifecycle
+
+Shadow Credit features a fully on-chain, score-gated DAO where voting power scales directly with a user's credit tier.
+
+1. **Propose**: A user with a score `≥ 670` (Near Prime or higher) creates a proposal.
+2. **Voting Period**: The voting window opens immediately and stays open for exactly **7 days**. Users cast votes, with weight scaled by their credit tier (Prime = 4×, Near Prime = 3×, Subprime = 2×, Deep Subprime = 1×).
+3. **Finalize**: Once the 7-day window expires, the original proposer clicks **Finalize**. The contract verifies quorum and tallies the votes. If successful, the proposal state becomes `Passed`.
+4. **Queue**: The passed proposal is pushed to the timelock queue.
+5. **Execute**: After the **2-day execution delay** expires, the proposal is executed on-chain.
+
+---
+
 ## Network Compatibility
 
 Shadow Credit is deployed on Base Sepolia for contract verification. Full FHE operations require a CoFHE-enabled network.

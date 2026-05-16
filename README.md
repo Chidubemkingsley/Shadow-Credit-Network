@@ -211,6 +211,18 @@ Shadow Credit features a fully on-chain, score-gated DAO where voting power scal
 
 ---
 
+## Soulbound Credit Identity NFT
+
+The `SoulboundCreditNFT` acts as a privacy-preserving, on-chain badge representing a user's credit reputation.
+
+- **Strictly Non-Transferable**: Standard ERC-721 transfer functions are disabled. It is permanently locked to the wallet that mints it.
+- **One Per Wallet**: A user must be registered and have computed a credit score to mint. Only one token is allowed per address.
+- **Privacy-Preserving Metadata**: Raw credit scores are *never* stored in the metadata. Instead, it reads the publicly decrypted score from the engine and categorizes it into a **Credit Tier** (Prime, Near Prime, Subprime, Deep Subprime). If a score is entirely private (undecrypted), it displays as "Unrated".
+- **Dynamic On-Chain SVG**: The NFT artwork is not hosted on IPFS. The smart contract dynamically generates the SVG image code on-chain, updating colors and text based on the user's current Credit Tier and the length of their score history.
+- **Refreshable State**: If a user's credit score changes, anyone can call `refreshTier()` to instantly update the NFT's tier and artwork to reflect the latest data.
+
+---
+
 ## Network Compatibility
 
 Shadow Credit is deployed on Base Sepolia for contract verification. Full FHE operations require a CoFHE-enabled network.

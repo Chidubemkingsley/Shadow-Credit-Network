@@ -5,7 +5,7 @@
 
 ---
 
-## Live System — Wave 4 Complete d
+## Live System — Wave 4 Complete 
 
 **Network:** Base Sepolia (Chain ID: 84532) · Wave 1–3 live  
 **FHE Network:** Fhenix Helium (Chain ID: 8008135) · Wave 4 FHE contracts

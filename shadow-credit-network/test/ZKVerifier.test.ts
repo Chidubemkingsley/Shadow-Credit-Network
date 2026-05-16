@@ -8,7 +8,7 @@ describe('ZKVerifier + CreditDataWithZK', function () {
 		const [owner, alice, bob] = await hre.ethers.getSigners()
 
 		// Deploy Groth16Verifier
-		const Groth16Verifier = await hre.ethers.getContractFactory('Groth16Verifier')
+		const Groth16Verifier = await hre.ethers.getContractFactory('contracts/Groth16Verifier.sol:Groth16Verifier')
 		const verifier = await Groth16Verifier.connect(owner).deploy()
 
 		// Deploy CreditDataWithZK
@@ -200,7 +200,7 @@ describe('ZKVerifier + CreditDataWithZK', function () {
 			const { zkBridge } = await loadFixture(deployFixture)
 
 			await expect(
-				zkBridge.verifyOnly('0x', [1n], hre.ethers.ZeroHash)
+				zkBridge.verifyOnly([1n, 2n], [[1n, 2n], [1n, 2n]], [1n, 2n], [1n])
 			).to.be.revertedWithCustomError(zkBridge, 'VerifierNotSet')
 		})
 
@@ -220,9 +220,10 @@ describe('ZKVerifier + CreditDataWithZK', function () {
 
 			await expect(
 				zkBridge.connect(alice).submitWithProof(
-					'0x' + '01'.repeat(192),
 					[1n, 2n],
-					hre.ethers.ZeroHash,
+					[[1n, 2n], [1n, 2n]],
+					[1n, 2n],
+					[1n],
 					1,
 					enc, enc, enc32, enc32, enc32, enc32
 				)

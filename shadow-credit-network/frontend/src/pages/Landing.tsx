@@ -14,6 +14,10 @@ import {
   Lock,
   Globe,
   Plug,
+  Vote,
+  BadgeCheck,
+  Layers,
+  GitBranch,
 } from "lucide-react";
 
 const fadeUp = {
@@ -56,13 +60,41 @@ const features = [
     desc: "Six weighted factors — Transaction Reliability, Staking, Governance, Protocol Interaction, Social Verification, Default History — with FHE-encrypted composite scoring.",
     color: "from-primary to-accent",
   },
+  {
+    icon: Vote,
+    title: "Score-Gated Governance",
+    desc: "Create proposals, vote with credit-tier-weighted power, and execute protocol changes on-chain. Prime holders get 4× the voting weight of Deep Subprime. propose → vote → queue → execute with timelock.",
+    color: "from-violet-500 to-violet-500/60",
+    wave: 4,
+  },
+  {
+    icon: BadgeCheck,
+    title: "Credit Identity NFT",
+    desc: "Mint a non-transferable ERC-721 soulbound NFT that publicly proves your credit tier (Prime / Near Prime / Subprime) without revealing your raw score. On-chain SVG metadata — no IPFS.",
+    color: "from-pink-500 to-pink-500/60",
+    wave: 4,
+  },
+  {
+    icon: Layers,
+    title: "Multi-Asset Lending",
+    desc: "Deposit ERC-20 tokens as collateral and borrow against them with credit-score-discounted LTV ratios. Per-asset lender yield distribution. Prime borrowers unlock 5000 bps risk factor.",
+    color: "from-teal-500 to-teal-500/60",
+    wave: 4,
+  },
+  {
+    icon: GitBranch,
+    title: "Cross-Chain Bridge",
+    desc: "Bridge your encrypted credit attestation to any chain via LayerZero V2. Replay protection, expiry enforcement, and score handle bridging — your creditworthiness follows you everywhere.",
+    color: "from-orange-500 to-orange-500/60",
+    wave: 4,
+  },
 ];
 
 const stats = [
   { value: "300–850", label: "Credit Score Range" },
-  { value: "3 Pools", label: "Risk Categories" },
   { value: "FHE", label: "Encrypted Scoring" },
-  { value: "6", label: "Reputation Factors" },
+  { value: "Wave 4", label: "Protocol Maturity" },
+  { value: "9", label: "Live Contracts" },
 ];
 
 export default function Landing() {
@@ -204,8 +236,12 @@ export default function Landing() {
               How It <span className="text-gradient">Works</span>
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-muted-foreground max-w-xl mx-auto text-lg">
-              Five core modules powered by smart contracts, each with a dedicated interface.
+              Nine battle-tested modules across four waves — privacy-preserving credit for the entire DeFi stack.
             </motion.p>
+            <motion.div variants={fadeUp} custom={2} className="flex items-center justify-center gap-3 mt-6">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Wave 1–3 Live on Base Sepolia</span>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20">Wave 4 Complete</span>
+            </motion.div>
           </motion.div>
 
           <div className="space-y-24">
@@ -218,8 +254,13 @@ export default function Landing() {
                 className={`flex flex-col md:flex-row items-center gap-12 ${i % 2 === 1 ? "md:flex-row-reverse" : ""}`}
               >
                 <motion.div variants={fadeUp} custom={0} className="flex-1">
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-6`}>
-                    <f.icon className="w-8 h-8 text-primary-foreground" />
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${f.color} flex items-center justify-center`}>
+                      <f.icon className="w-8 h-8 text-white" />
+                    </div>
+                    {(f as any).wave === 4 && (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-violet-500/10 text-violet-400 border border-violet-500/20">Wave 4</span>
+                    )}
                   </div>
                   <h3 className="text-3xl font-bold font-heading mb-4">{f.title}</h3>
                   <p className="text-muted-foreground text-lg leading-relaxed">{f.desc}</p>
@@ -413,6 +454,90 @@ function FeatureVisual({ index }: { index: number }) {
         </div>
       ))}
     </div>,
+    // Governance (Wave 4)
+    <div className="glass rounded-2xl p-6 space-y-3">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm font-semibold">Active Proposals</span>
+        <span className="px-2 py-0.5 rounded-full text-xs bg-violet-500/10 text-violet-400">Wave 4</span>
+      </div>
+      {[
+        { title: "Update Score Validity: 120d", votes: "2,400", state: "Active", color: "text-success" },
+        { title: "Pause Conservative Pool", votes: "800", state: "Defeated", color: "text-destructive" },
+        { title: "Signal: Mainnet Migration", votes: "3,200", state: "Passed", color: "text-primary" },
+      ].map((p) => (
+        <div key={p.title} className="bg-muted rounded-xl p-3 flex justify-between items-center">
+          <div>
+            <div className="text-xs font-semibold">{p.title}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{p.votes} votes cast</div>
+          </div>
+          <span className={`text-xs font-bold ${p.color}`}>{p.state}</span>
+        </div>
+      ))}
+      <div className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-3 text-xs text-violet-400 text-center">
+        Voting weight = credit tier × base power
+      </div>
+    </div>,
+    // NFT Identity (Wave 4)
+    <div className="glass rounded-2xl p-6 flex flex-col items-center gap-4">
+      <div className="w-48 h-48 rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col items-center justify-center gap-3">
+        <div className="w-16 h-16 rounded-full border-4 border-primary flex items-center justify-center">
+          <span className="text-2xl font-bold font-heading text-primary">P</span>
+        </div>
+        <div className="text-center">
+          <div className="font-bold text-sm">Shadow Credit</div>
+          <div className="text-xs text-muted-foreground">Identity #0042</div>
+          <div className="mt-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold">Prime Tier</div>
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground text-center">
+        Soulbound · Non-transferable · On-chain SVG
+      </div>
+    </div>,
+    // Multi-Asset (Wave 4)
+    <div className="glass rounded-2xl p-6 space-y-3">
+      <div className="text-sm font-semibold mb-4">Supported Collateral</div>
+      {[
+        { token: "WETH", ltv: "80%", apy: "4.2%", color: "bg-blue-500" },
+        { token: "USDC", ltv: "90%", apy: "2.8%", color: "bg-green-500" },
+        { token: "WBTC", ltv: "70%", apy: "5.5%", color: "bg-orange-500" },
+      ].map((asset) => (
+        <div key={asset.token} className="bg-muted rounded-xl p-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full ${asset.color} flex items-center justify-center text-white text-xs font-bold`}>{asset.token[0]}</div>
+            <div>
+              <div className="text-sm font-semibold">{asset.token}</div>
+              <div className="text-xs text-muted-foreground">Max LTV: {asset.ltv}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs font-bold text-success">{asset.apy}</div>
+            <div className="text-xs text-muted-foreground">Lender APY</div>
+          </div>
+        </div>
+      ))}
+    </div>,
+    // Cross-Chain (Wave 4)
+    <div className="glass rounded-2xl p-6 space-y-4">
+      <div className="text-sm font-semibold mb-2">Score Attestation Bridge</div>
+      <div className="flex items-center gap-4">
+        <div className="flex-1 bg-muted rounded-xl p-3 text-center">
+          <div className="text-xs text-muted-foreground">Origin</div>
+          <div className="font-bold text-sm mt-1">Fhenix Helium</div>
+          <div className="text-xs text-primary mt-1">Score: 782</div>
+        </div>
+        <motion.div animate={{ x: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+          <ArrowRight className="w-5 h-5 text-primary" />
+        </motion.div>
+        <div className="flex-1 bg-muted rounded-xl p-3 text-center">
+          <div className="text-xs text-muted-foreground">Destination</div>
+          <div className="font-bold text-sm mt-1">Any Chain</div>
+          <div className="text-xs text-primary mt-1">Attested ✓</div>
+        </div>
+      </div>
+      <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3 text-xs text-orange-400 text-center">
+        LayerZero V2 · Replay-Protected · Expiry-Enforced
+      </div>
+    </div>,
   ];
-  return visuals[index];
+  return visuals[index] ?? <div className="glass rounded-2xl p-12 flex items-center justify-center text-muted-foreground text-sm">Preview coming soon</div>;
 }

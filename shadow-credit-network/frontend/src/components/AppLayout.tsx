@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, Send, Wallet, Handshake, Star, Plug, AlertTriangle } from "lucide-react";
+import { BarChart3, Send, Wallet, Handshake, Star, Plug, AlertTriangle, Vote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/lib/wallet";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ const navItems = [
   { to: "/app/borrow",     icon: Wallet,    label: "Borrow" },
   { to: "/app/delegation", icon: Handshake, label: "Delegation" },
   { to: "/app/reputation", icon: Star,      label: "Reputation" },
+  { to: "/app/governance", icon: Vote,      label: "Governance", wave4: true },
 ];
 
 export default function AppLayout() {
@@ -50,7 +51,10 @@ export default function AppLayout() {
               }
             >
               <item.icon className="w-4 h-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {(item as any).wave4 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">W4</span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -80,6 +84,18 @@ export default function AppLayout() {
             <span className="text-muted-foreground">Reputation</span>
             <span className={cn("px-1.5 py-0.5 rounded text-xs font-mono", ADDRESSES.reputation ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
               {ADDRESSES.reputation ? "Live" : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="text-muted-foreground">Governance</span>
+            <span className={cn("px-1.5 py-0.5 rounded text-xs font-mono", ADDRESSES.governance ? "bg-violet-500/15 text-violet-400" : "bg-muted text-muted-foreground")}>
+              {ADDRESSES.governance ? "W4" : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="text-muted-foreground">Identity NFT</span>
+            <span className={cn("px-1.5 py-0.5 rounded text-xs font-mono", ADDRESSES.nft ? "bg-violet-500/15 text-violet-400" : "bg-muted text-muted-foreground")}>
+              {ADDRESSES.nft ? "W4" : "—"}
             </span>
           </div>
         </div>

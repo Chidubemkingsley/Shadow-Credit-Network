@@ -11,6 +11,8 @@ import {
   DELEGATION_V2_ABI,
   DELEGATION_ABI,
   REPUTATION_REGISTRY_ABI,
+  GOVERNANCE_ABI,
+  CREDIT_NFT_ABI,
 } from "./abis";
 
 const env = import.meta.env;
@@ -20,6 +22,8 @@ export const ADDRESSES = {
   loanPool:       env.VITE_LOAN_POOL_V3_ADDRESS        || env.VITE_LOAN_POOL_ADDRESS            || "",
   delegation:     env.VITE_DELEGATION_V2_ADDRESS       || env.VITE_DELEGATION_ADDRESS           || "",
   reputation:     env.VITE_REPUTATION_REGISTRY_ADDRESS || "",
+  governance:     env.VITE_GOVERNANCE_ADDRESS          || "",
+  nft:            env.VITE_CREDIT_NFT_ADDRESS          || "",
   // Flags so UI can show which version is active
   isV3Engine:     !!env.VITE_CREDIT_ENGINE_V3_ADDRESS,
   isV3Pool:       !!env.VITE_LOAN_POOL_V3_ADDRESS,
@@ -49,6 +53,16 @@ export function getDelegationContract(signerOrProvider: ethers.Signer | ethers.P
 export function getReputationContract(signerOrProvider: ethers.Signer | ethers.Provider) {
   if (!ADDRESSES.reputation) return null;
   return new ethers.Contract(ADDRESSES.reputation, REPUTATION_REGISTRY_ABI, signerOrProvider);
+}
+
+export function getGovernanceContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  if (!ADDRESSES.governance) return null;
+  return new ethers.Contract(ADDRESSES.governance, GOVERNANCE_ABI, signerOrProvider);
+}
+
+export function getCreditNFTContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  if (!ADDRESSES.nft) return null;
+  return new ethers.Contract(ADDRESSES.nft, CREDIT_NFT_ABI, signerOrProvider);
 }
 
 // ── Score formula (client-side preview — matches on-chain formula exactly) ───

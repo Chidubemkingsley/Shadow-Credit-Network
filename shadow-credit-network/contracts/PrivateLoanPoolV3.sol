@@ -348,7 +348,6 @@ contract PrivateLoanPoolV3 is Ownable {
         if (loan.status != LoanStatus.Active) revert LoanNotActive();
 
         loan.repaidAmount  += msg.value;
-        totalLoanedOut     -= msg.value;
         totalPoolLiquidity += msg.value;
 
         bool fullRepayment = loan.repaidAmount >= loan.totalOwed;
@@ -356,15 +355,23 @@ contract PrivateLoanPoolV3 is Ownable {
         // NEW: distribute interest portion proportionally to lenders
         // Interest = totalOwed - principal. We distribute the interest
         // component of this payment proportionally.
+        uint256 interestShare = 0;
         if (loan.totalOwed > loan.principal && totalPoolLiquidity > 0) {
             uint256 interestPortion = loan.totalOwed - loan.principal;
             // What fraction of this payment is interest?
             // interestShare = msg.value * interestPortion / loan.totalOwed
-            uint256 interestShare = (msg.value * interestPortion) / loan.totalOwed;
+            interestShare = (msg.value * interestPortion) / loan.totalOwed;
             if (interestShare > 0) {
                 _distributeYield(interestShare);
                 totalInterestCollected += interestShare;
             }
+        }
+        
+        uint256 principalPortion = msg.value > interestShare ? msg.value - interestShare : 0;
+        if (principalPortion > totalLoanedOut) {
+            totalLoanedOut = 0;
+        } else {
+            totalLoanedOut -= principalPortion;
         }
 
         if (fullRepayment) {

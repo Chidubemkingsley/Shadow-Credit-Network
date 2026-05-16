@@ -195,3 +195,54 @@ export const REPUTATION_REGISTRY_ABI = [
   "event DecayApplied(address indexed user, uint256 decayedFactors)",
   "event ActivityNotified(address indexed user, address indexed caller)",
 ] as const;
+
+// ── ScoreGatedGovernance (Wave 4) ─────────────────────────────────────────────
+// ProposalType enum: 0=Signal, 1=UpdateScoreValidity, 2=PausePool,
+//   3=UpdateMinVoteScore, 4=UpdateVotingPeriod, 5=UpdateExecutionDelay
+// ProposalState enum: 0=Active, 1=Passed, 2=Defeated, 3=Queued, 4=Executed, 5=Cancelled
+export const GOVERNANCE_ABI = [
+  // Propose
+  "function propose(uint8 proposalType, uint256 param, string calldata description) external returns (uint256 proposalId)",
+  // Vote
+  "function castVote(uint256 proposalId, bool support) external",
+  // Lifecycle
+  "function finalizeProposal(uint256 proposalId) external",
+  "function queueProposal(uint256 proposalId) external",
+  "function executeProposal(uint256 proposalId) external",
+  "function cancelProposal(uint256 proposalId) external",
+  // Read
+  "function proposalCount() external view returns (uint256)",
+  "function getProposal(uint256 proposalId) external view returns (uint256 id, address proposer, uint8 proposalType, uint256 param, string description, uint256 voteStart, uint256 voteEnd, uint256 forVotes, uint256 againstVotes, uint256 voterCount, uint8 state, uint256 executableAt)",
+  "function hasVoted(address voter, uint256 proposalId) external view returns (bool)",
+  "function isEligibleVoter(address user) external view returns (bool eligible, uint256 weight, uint8 tier)",
+  "function isEligibleProposer(address user) external view returns (bool)",
+  // Parameters
+  "function minVoteScore() external view returns (uint256)",
+  "function minProposeScore() external view returns (uint256)",
+  "function votingPeriod() external view returns (uint256)",
+  "function executionDelay() external view returns (uint256)",
+  "function quorumThreshold() external view returns (uint256)",
+  // Events
+  "event ProposalCreated(uint256 indexed proposalId, address indexed proposer, uint8 proposalType, uint256 voteEnd)",
+  "event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight)",
+  "event ProposalFinalized(uint256 indexed proposalId, uint8 state)",
+  "event ProposalQueued(uint256 indexed proposalId, uint256 executableAt)",
+  "event ProposalExecuted(uint256 indexed proposalId)",
+  "event ProposalCancelled(uint256 indexed proposalId)",
+] as const;
+
+// ── SoulboundCreditNFT (Wave 4) ───────────────────────────────────────────────
+export const CREDIT_NFT_ABI = [
+  "function mint() external",
+  "function burn() external",
+  "function refreshTier(address holder) external",
+  "function hasIdentity(address holder) external view returns (bool)",
+  "function holderToken(address) external view returns (uint256)",
+  "function getTokenData(address holder) external view returns (uint256 tokenId, uint8 tier, uint256 scoreHistoryLength, uint256 mintedAt, uint256 lastRefreshedAt)",
+  "function totalMinted() external view returns (uint256)",
+  "function tokenURI(uint256 tokenId) external view returns (string)",
+  "event CreditIdentityMinted(address indexed holder, uint256 indexed tokenId, uint8 tier)",
+  "event CreditIdentityBurned(address indexed holder, uint256 indexed tokenId)",
+  "event TierRefreshed(address indexed holder, uint256 indexed tokenId, uint8 oldTier, uint8 newTier)",
+] as const;
+

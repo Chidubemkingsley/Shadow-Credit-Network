@@ -11,6 +11,7 @@ import SubmitData from "./pages/app/SubmitData";
 import Borrow from "./pages/app/Borrow";
 import Delegation from "./pages/app/Delegation";
 import Reputation from "./pages/app/Reputation";
+import Governance from "./pages/app/Governance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="borrow" element={<Borrow />} />
               <Route path="delegation" element={<Delegation />} />
               <Route path="reputation" element={<Reputation />} />
+              <Route path="governance" element={<Governance />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

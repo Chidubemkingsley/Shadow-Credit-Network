@@ -5,10 +5,12 @@
 
 ---
 
-## Live System — Verify in 3 Minutes
+## Live System — Wave 4 Complete
 
-**Network:** Base Sepolia (Chain ID: 84532)
+**Network:** Base Sepolia (Chain ID: 84532) · Wave 1–3 live  
+**FHE Network:** Fhenix Helium (Chain ID: 8008135) · Wave 4 FHE contracts
 
+### Wave 3 — Base Sepolia (Live)
 | Contract | Address | Explorer |
 |---|---|---|
 | `EncryptedCreditEngineV3` | `0x5A03628A15674c425606e0D4710D66EBa8da09E6` | [View](https://sepolia.basescan.org/address/0x5A03628A15674c425606e0D4710D66EBa8da09E6) |
@@ -16,12 +18,24 @@
 | `CreditDelegationV2` | `0xB60cA6232CD26CC74C5605C35E9EbecF4C882348` | [View](https://sepolia.basescan.org/address/0xB60cA6232CD26CC74C5605C35E9EbecF4C882348) |
 | `ReputationRegistry` | `0xeecAb683D93a483669D797E4B7a06e8c286A25dC` | [View](https://sepolia.basescan.org/address/0xeecAb683D93a483669D797E4B7a06e8c286A25dC) |
 | `CreditDataWithZK` | `0xA464874091e2F16838746f41F2c5781dc01AEb51` | [View](https://sepolia.basescan.org/address/0xA464874091e2F16838746f41F2c5781dc01AEb51) |
-| `SimpleCreditEngine` *(Wave 1)* | `0x749663A4B343846a7C02d14F7d15c72A2643b02B` | [View](https://sepolia.basescan.org/address/0x749663A4B343846a7C02d14F7d15c72A2643b02B) |
-| `PrivateLoanPool` *(Wave 1)* | `0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69` | [View](https://sepolia.basescan.org/address/0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69) |
-| `CreditDelegation` *(Wave 1)* | `0xA97c943555E92b7E8472118A3b058e72edcDC694` | [View](https://sepolia.basescan.org/address/0xA97c943555E92b7E8472118A3b058e72edcDC694) |
 
-**Deployer:** `0x90356CF97B3BF1749A604d3F89b3DF3602A459E3`
-**Deployed:** Wave 3 contracts live on Base Sepolia — 2026-05-03
+### Wave 4 — Base Sepolia (Live)
+| Contract | Address | Explorer |
+|---|---|---|
+| `ScoreGatedGovernance` | `0x4083a530127023248A0497bD7E16758e5226735f` | [View](https://sepolia.basescan.org/address/0x4083a530127023248A0497bD7E16758e5226735f) |
+| `SoulboundCreditNFT` | `0xbf78328BE598c54097cEE7e4865302A5Cd482120` | [View](https://sepolia.basescan.org/address/0xbf78328BE598c54097cEE7e4865302A5Cd482120) |
+| `MultiAssetLoanPool` | *Pending Fhenix Helium deployment* | |
+| `CrossChainCreditBridge` | *Pending Fhenix Helium deployment* | |
+
+### Wave 1 Reference
+| Contract | Address | Explorer |
+|---|---|---|
+| `SimpleCreditEngine` | `0x749663A4B343846a7C02d14F7d15c72A2643b02B` | [View](https://sepolia.basescan.org/address/0x749663A4B343846a7C02d14F7d15c72A2643b02B) |
+| `PrivateLoanPool` | `0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69` | [View](https://sepolia.basescan.org/address/0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69) |
+| `CreditDelegation` | `0xA97c943555E92b7E8472118A3b058e72edcDC694` | [View](https://sepolia.basescan.org/address/0xA97c943555E92b7E8472118A3b058e72edcDC694) |
+
+**Deployer:** `0x90356CF97B3BF1749A604d3F89b3DF3602A459E3`  
+**Wave 3 deployed:** 2026-05-03 · **Wave 4 complete:** 2026-05-16
 
 ```bash
 # Verify any contract in 30 seconds
@@ -252,7 +266,7 @@ All technical depth lives in `/docs`:
 | **Wave 1** | ✅ Complete | `SimpleCreditEngine` (plaintext scoring), `PrivateLoanPool` (plaintext approval), `CreditDelegation` (yield accumulates, not paid). Live on Base Sepolia. Proved the protocol concept end-to-end. |
 | **Wave 2** | ✅ Complete | `EncryptedCreditEngineV2` (FHE scoring with real `InEuint*` ciphertexts), `PrivateLoanPoolV2` (ebool-gated disbursement — ETH never moves without FHE result), `CreditDataWithZK` (ZK range proofs + FHE hybrid). |
 | **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating — FHE-only actions blocked gracefully on Base Sepolia. All deployed 2026-05-03. |
-| **Wave 4** | 🔜 Planned | ERC-721 soulbound credit identity NFT. Score-gated governance. Multi-asset pools (ERC-20 collateral). Cross-chain score portability via LayerZero. |
+| **Wave 4** | ✅ Complete | `SoulboundCreditNFT` (ERC-721 non-transferable credit identity, on-chain SVG, tier-based metadata). `ScoreGatedGovernance` (score-gated proposals, weighted voting by tier, propose→vote→finalize→queue→execute with timelock). `MultiAssetLoanPool` (ERC-20 collateral, per-asset lender yield, collateral LTV discount on credit score threshold). `CrossChainCreditBridge` (LayerZero V2 OApp, score attestation bridging to any chain, replay protection, expiry enforcement). |
 | **Wave 5** | 🔜 Planned | Mainnet deployment. Institutional attestation network. Undercollateralized stablecoin backed by credit scores. DAO governance of pool parameters. |
 
 ---

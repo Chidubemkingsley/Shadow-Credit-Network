@@ -7,6 +7,15 @@ import './tasks'
 
 dotenv.config()
 
+let PRIVATE_KEY = process.env.PRIVATE_KEY || '';
+if (PRIVATE_KEY.startsWith('=')) {
+	PRIVATE_KEY = PRIVATE_KEY.slice(1);
+}
+if (PRIVATE_KEY && !PRIVATE_KEY.startsWith('0x')) {
+	PRIVATE_KEY = '0x' + PRIVATE_KEY;
+}
+const accounts = PRIVATE_KEY.length === 66 ? [PRIVATE_KEY] : [];
+
 const config: HardhatUserConfig = {
 	solidity: {
 		version: '0.8.25',
@@ -24,7 +33,7 @@ const config: HardhatUserConfig = {
 		// Fhenix Helium Testnet (supports FHE)
 		'helium': {
 			url: 'https://api.helium.fhenix.zone',
-			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+			accounts: accounts,
 			chainId: 8008135,
 			gasMultiplier: 1.2,
 			timeout: 60000,
@@ -36,7 +45,7 @@ const config: HardhatUserConfig = {
 		// Sepolia testnet configuration
 		'eth-sepolia': {
 			url: process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia.publicnode.com',
-			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+			accounts: accounts,
 			chainId: 11155111,
 			gasMultiplier: 1.2,
 			timeout: 60000,
@@ -46,7 +55,7 @@ const config: HardhatUserConfig = {
 		// Arbitrum Sepolia testnet configuration
 		'arb-sepolia': {
 			url: process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
-			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+			accounts: accounts,
 			chainId: 421614,
 			gasMultiplier: 1.2,
 			timeout: 60000,
@@ -56,7 +65,7 @@ const config: HardhatUserConfig = {
 		// Base Sepolia testnet configuration
 		'base-sepolia': {
 			url: process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org',
-			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+			accounts: accounts,
 			chainId: 84532,
 			gasMultiplier: 1.2,
 			timeout: 60000,

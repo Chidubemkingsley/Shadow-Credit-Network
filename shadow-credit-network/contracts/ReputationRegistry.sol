@@ -129,6 +129,9 @@ contract ReputationRegistry is Ownable {
     /// @notice Minimum attestations required for full reputation
     uint256 public minAttestations;
 
+    /// @notice Stores whether the configured factor weights are valid (sum to 10000)
+    ebool public areWeightsValid;
+
     // ──────────────────────────────────────────────
     //  Constructor
     // ──────────────────────────────────────────────
@@ -610,7 +613,8 @@ contract ReputationRegistry is Ownable {
 
         // Validate total is 10000 (encrypted check)
         euint32 expected = FHE.asEuint32(10000);
-        FHE.eq(totalWeight, expected);
+        areWeightsValid = FHE.eq(totalWeight, expected);
+        FHE.allowThis(areWeightsValid);
     }
 
     /// @notice Update minimum attestations required

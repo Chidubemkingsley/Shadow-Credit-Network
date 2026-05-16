@@ -22,8 +22,8 @@
 ### Wave 4 — Base Sepolia (Live)
 | Contract | Address | Explorer |
 |---|---|---|
-| `ScoreGatedGovernance` | `0x4083a530127023248A0497bD7E16758e5226735f` | [View](https://sepolia.basescan.org/address/0x4083a530127023248A0497bD7E16758e5226735f) |
-| `SoulboundCreditNFT` | `0xbf78328BE598c54097cEE7e4865302A5Cd482120` | [View](https://sepolia.basescan.org/address/0xbf78328BE598c54097cEE7e4865302A5Cd482120) |
+| `ScoreGatedGovernance` | `0x43bF2ac1909dFbBa952EDfd4aE119C9B37E882Fd` | [View](https://sepolia.basescan.org/address/0x43bF2ac1909dFbBa952EDfd4aE119C9B37E882Fd) |
+| `SoulboundCreditNFT` | `0x3494c525094bc9907443ad9D4311Cd87E76352F8` | [View](https://sepolia.basescan.org/address/0x3494c525094bc9907443ad9D4311Cd87E76352F8) |
 | `MultiAssetLoanPool` | *Pending Fhenix Helium deployment* | |
 | `CrossChainCreditBridge` | *Pending Fhenix Helium deployment* | |
 

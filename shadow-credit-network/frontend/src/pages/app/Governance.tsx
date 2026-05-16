@@ -374,7 +374,7 @@ export default function Governance() {
                         {!isConnected && <p className="text-xs text-muted-foreground">Connect wallet to vote.</p>}
                         {/* Finalize once voting period ends */}
                         <Button size="sm" variant="outline" className="text-xs" disabled={txLoading}
-                          onClick={() => lifecycleAction("finalizeProposal", p.id)}>Finalize</Button>
+                          onClick={() => lifecycleAction("finalize", p.id)}>Finalize</Button>
                       </>
                     )
                   )}
@@ -382,7 +382,7 @@ export default function Governance() {
                   {/* Passed: Queue */}
                   {p.state === 1 && (
                     <Button size="sm" className="gap-2 bg-warning/10 text-warning hover:bg-warning/20 border border-warning/20"
-                      disabled={!isConnected || txLoading} onClick={() => lifecycleAction("queueProposal", p.id)}>
+                      disabled={!isConnected || txLoading} onClick={() => lifecycleAction("queue", p.id)}>
                       <Gavel className="w-4 h-4"/>Queue Proposal
                     </Button>
                   )}
@@ -390,7 +390,7 @@ export default function Governance() {
                   {/* Queued: Execute */}
                   {p.state === 3 && (
                     <Button size="sm" className="gap-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-                      disabled={!isConnected || txLoading} onClick={() => lifecycleAction("executeProposal", p.id)}>
+                      disabled={!isConnected || txLoading} onClick={() => lifecycleAction("execute", p.id)}>
                       <CheckCircle className="w-4 h-4"/>Execute
                     </Button>
                   )}

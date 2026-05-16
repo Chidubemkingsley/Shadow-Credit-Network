@@ -45,6 +45,17 @@ async function main() {
   fs.writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2));
   console.log("\nSaved to deployments/base-sepolia.json");
 
+  // 4. Wire V1 SimpleCreditEngine as legacy fallback for Base Sepolia demo
+  const v1Engine = deployments.SimpleCreditEngine;
+  if (v1Engine) {
+    console.log("\nWiring V1 legacy engine for Base Sepolia demo fallback...");
+    const tx = await governance.setLegacyCreditEngine(v1Engine);
+    await tx.wait();
+    console.log("V1 legacy engine wired:", v1Engine);
+  } else {
+    console.warn("SimpleCreditEngine not found in deployments — skipping legacy wiring.");
+  }
+
   // 4. Update frontend environment
   const envPath = path.join(__dirname, "..", "frontend", ".env.local");
   if (fs.existsSync(envPath)) {

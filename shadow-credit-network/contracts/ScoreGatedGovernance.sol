@@ -11,6 +11,13 @@ interface ICreditEngineForGov {
     function getDecryptedScore(address user) external view returns (uint32 score, bool isDecrypted);
 }
 
+/// @notice Minimal interface to SimpleCreditEngine (V1 — plaintext scores, Base Sepolia fallback)
+interface ILegacyCreditEngine {
+    function checkCreditThreshold(address user, uint256 minScore) external view returns (bool);
+    function hasComputedScore(address user) external view returns (bool);
+    function isRegistered(address user) external view returns (bool);
+}
+
 /// @notice Minimal interface to PrivateLoanPoolV3 for proposal execution
 interface ILoanPoolForGov {
     function setPaused(bool paused) external;
@@ -144,6 +151,12 @@ contract ScoreGatedGovernance is Ownable {
     ILoanPoolForGov     public loanPool;
     ICreditEngineAdmin  public creditEngineAdmin;
 
+    /// @notice V1 SimpleCreditEngine fallback — used when V3 FHE decryption
+    ///         is unavailable (e.g., Base Sepolia testnet demo mode).
+    ///         When set, eligibility falls back to V1 plaintext scores if
+    ///         the V3 engine cannot produce a decrypted score.
+    ILegacyCreditEngine public legacyCreditEngine;
+
     // Governance parameters (governance-adjustable via proposals)
     uint256 public minVoteScore    = 580;    // minimum decrypted score to vote (Subprime+)
     uint256 public minProposeScore = 670;    // minimum decrypted score to propose (NearPrime+)
@@ -189,29 +202,57 @@ contract ScoreGatedGovernance is Ownable {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Check if an address is eligible to vote (score decrypted, fresh, >= threshold).
+    /// @notice Check if an address is eligible to vote.
+    ///         Primary path: V3 FHE decrypted score.
+    ///         Fallback path: V1 plaintext checkCreditThreshold (Base Sepolia demo).
     function isEligibleVoter(address user) public view returns (bool eligible, uint256 weight, uint8 tier) {
-        if (address(creditEngine) == address(0)) return (false, 0, 0);
-        if (!creditEngine.isRegistered(user))   return (false, 0, 0);
-        if (!creditEngine.hasCreditScore(user)) return (false, 0, 0);
-        if (creditEngine.isScoreStale(user))    return (false, 0, 0);
+        // ── Primary: V3 FHE path ──────────────────────────────────────────────
+        if (address(creditEngine) != address(0)) {
+            if (!creditEngine.isRegistered(user))   return (false, 0, 0);
+            if (!creditEngine.hasCreditScore(user)) {
+                // V3 score missing — try V1 fallback below
+            } else if (!creditEngine.isScoreStale(user)) {
+                (uint32 score, bool isDecrypted) = creditEngine.getDecryptedScore(user);
+                if (isDecrypted && score >= minVoteScore) {
+                    (weight, tier) = _scoreToWeight(score);
+                    return (true, weight, tier);
+                }
+                // Score not decrypted (FHE network required) — fall through to V1
+            }
+        }
 
-        (uint32 score, bool isDecrypted) = creditEngine.getDecryptedScore(user);
-        if (!isDecrypted || score == 0)         return (false, 0, 0);
-        if (score < minVoteScore)               return (false, 0, 0);
+        // ── Fallback: V1 plaintext path (Base Sepolia demo) ──────────────────
+        if (address(legacyCreditEngine) != address(0)) {
+            if (!legacyCreditEngine.isRegistered(user))    return (false, 0, 0);
+            if (!legacyCreditEngine.hasComputedScore(user)) return (false, 0, 0);
+            bool meetsThreshold = legacyCreditEngine.checkCreditThreshold(user, minVoteScore);
+            if (meetsThreshold) {
+                // V1 gives pass/fail only — assign Subprime weight (2×) as safe default
+                return (true, weightSubprime, 2);
+            }
+        }
 
-        (weight, tier) = _scoreToWeight(score);
-        return (true, weight, tier);
+        return (false, 0, 0);
     }
 
     /// @notice Check if an address is eligible to propose.
     function isEligibleProposer(address user) public view returns (bool) {
-        if (address(creditEngine) == address(0)) return false;
-        if (!creditEngine.isRegistered(user))    return false;
-        if (!creditEngine.hasCreditScore(user))  return false;
-        if (creditEngine.isScoreStale(user))     return false;
+        // ── Primary: V3 FHE path ──────────────────────────────────────────────
+        if (address(creditEngine) != address(0)) {
+            if (creditEngine.isRegistered(user) && creditEngine.hasCreditScore(user) && !creditEngine.isScoreStale(user)) {
+                (uint32 score, bool isDecrypted) = creditEngine.getDecryptedScore(user);
+                if (isDecrypted && score >= minProposeScore) return true;
+            }
+        }
 
-        (uint32 score, bool isDecrypted) = creditEngine.getDecryptedScore(user);
-        return isDecrypted && score >= minProposeScore;
+        // ── Fallback: V1 plaintext path ───────────────────────────────────────
+        if (address(legacyCreditEngine) != address(0)) {
+            if (legacyCreditEngine.isRegistered(user) && legacyCreditEngine.hasComputedScore(user)) {
+                return legacyCreditEngine.checkCreditThreshold(user, minProposeScore);
+            }
+        }
+
+        return false;
     }
 
     function _scoreToWeight(uint32 score) internal view returns (uint256 weight, uint8 tier) {
@@ -519,5 +560,14 @@ contract ScoreGatedGovernance is Ownable {
         require(_score >= 300 && _score <= 850, "Score out of range");
         minProposeScore = _score;
         emit GovernanceParamUpdated("minProposeScore", _score);
+    }
+
+    /// @notice Set V1 legacy credit engine for Base Sepolia demo fallback.
+    ///         When set, users with a valid V1 plaintext score can vote/propose
+    ///         even when V3 FHE decryption is unavailable.
+    ///         Set to address(0) to disable the fallback.
+    function setLegacyCreditEngine(address _engine) external onlyOwner {
+        legacyCreditEngine = ILegacyCreditEngine(_engine);
+        emit GovernanceParamUpdated("legacyCreditEngine", uint256(uint160(_engine)));
     }
 }

@@ -206,9 +206,9 @@ export const GOVERNANCE_ABI = [
   // Vote
   "function castVote(uint256 proposalId, bool support) external",
   // Lifecycle
-  "function finalizeProposal(uint256 proposalId) external",
-  "function queueProposal(uint256 proposalId) external",
-  "function executeProposal(uint256 proposalId) external",
+  "function finalize(uint256 proposalId) external",
+  "function queue(uint256 proposalId) external",
+  "function execute(uint256 proposalId) external",
   "function cancelProposal(uint256 proposalId) external",
   // Read
   "function proposalCount() external view returns (uint256)",

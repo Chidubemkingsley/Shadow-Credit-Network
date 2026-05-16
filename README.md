@@ -5,6 +5,8 @@
 
 ---
 
+![imagw](s2.png)
+
 ## Live System — Wave 4 Complete 
 
 **Network:** Base Sepolia (Chain ID: 84532) · Wave 1–3 live  

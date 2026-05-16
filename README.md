@@ -273,8 +273,8 @@ All technical depth lives in `/docs`:
 
 | Document | What's Inside |
 |---|---|
-| [`ARCHITECTURE.md`](./Shadow-credit-network/docs/ARCHITECTURE.md) | Three-contract design, full protocol flows, privacy model |
-| [`SECURITY.md`](./Shadow-credit-network/shadow-credit-network/docs/SECURITY.md) | The 4 escrow invariants with Solidity code |
+| [`ARCHITECTURE.md`](Shadow-credit-network/docs/ARCHITECTURE.md) | Three-contract design, full protocol flows, privacy model |
+| [`SECURITY.md`](Shadow-credit-network/shadow-credit-network/docs/SECURITY.md) | The 4 escrow invariants with Solidity code |
 | [`AUDIT.md`](./Shadow-credit-network/shadow-credit-network/docs/AUDIT.md) | All 19 audit findings mapped to fixes |
 | [`TESTS.md`](./Shadow-credit-network/shadow-credit-network/docs/TESTS.md) | Every test name, invariant test scenarios |
 | [`API.md`](./Shadow-credit-network/shadow-credit-network/docs/API.md) | Complete function reference and roles |

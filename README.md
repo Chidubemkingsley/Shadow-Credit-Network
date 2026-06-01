@@ -15,7 +15,7 @@
 
 ### Wave 3–5 — Arbitrum Sepolia (Live, CoFHE Enabled)
 | Contract | Address | Explorer |
-|---|---|---|---|
+|---|---|---|
 | `ReputationRegistry` | `0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f` | [View](https://sepolia.arbiscan.io/address/0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f) |
 | `EncryptedCreditEngineV3` | `0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1` | [View](https://sepolia.arbiscan.io/address/0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1) |
 | `PrivateLoanPoolV3` | `0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6` | [View](https://sepolia.arbiscan.io/address/0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6) |

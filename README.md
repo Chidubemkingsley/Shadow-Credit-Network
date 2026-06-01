@@ -1,5 +1,10 @@
 # Shadow Credit Network
 
+
+# [VIDEO DEMO](https://youtu.be/h1ZtEQiWQrc)
+# [LIVE WEBSITE](https://shadow-credit-network-wave3.vercel.app/)
+---
+
 > **Privacy-preserving undercollateralized lending on Arbitrum Sepolia.**
 > Your credit score is computed on encrypted data. No plaintext ever touches the chain.
 > CoFHE on Arbitrum — FHE operations auto-fallback to direct disbursement when unavailable.

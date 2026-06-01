@@ -74,7 +74,11 @@
 		"//   -------------------": "",
 		"arb-sepolia:deploy-counter": "hardhat deploy-counter --network arb-sepolia",
 		"arb-sepolia:increment-counter": "hardhat increment-counter --network arb-sepolia",
-		"arb-sepolia:reset-counter": "hardhat reset-counter --network arb-sepolia"
+		"arb-sepolia:reset-counter": "hardhat reset-counter --network arb-sepolia",
+		"// -------------------": "",
+		"//  --- Wave 5 (Arbitrum Sepolia) ---": "",
+		"//   --------------------": "",
+		"arb-sepolia:deploy-wave5": "hardhat deploy-wave5 --network arb-sepolia"
 	},
 	"repository": {
 		"type": "git",

@@ -13,22 +13,30 @@ import {
   REPUTATION_REGISTRY_ABI,
   GOVERNANCE_ABI,
   CREDIT_NFT_ABI,
+  MULTI_ASSET_LOAN_POOL_ABI,
+  CROSS_CHAIN_BRIDGE_ABI,
+  TASK_MANAGER_ABI,
 } from "./abis";
 
 const env = import.meta.env;
 
 export const ADDRESSES = {
-  creditEngine:   env.VITE_CREDIT_ENGINE_V3_ADDRESS   || env.VITE_SIMPLE_CREDIT_ENGINE_ADDRESS || "",
-  loanPool:       env.VITE_LOAN_POOL_V3_ADDRESS        || env.VITE_LOAN_POOL_ADDRESS            || "",
-  delegation:     env.VITE_DELEGATION_V2_ADDRESS       || env.VITE_DELEGATION_ADDRESS           || "",
-  reputation:     env.VITE_REPUTATION_REGISTRY_ADDRESS || "",
-  governance:     env.VITE_GOVERNANCE_ADDRESS          || "",
-  nft:            env.VITE_CREDIT_NFT_ADDRESS          || "",
+  creditEngine:     env.VITE_CREDIT_ENGINE_V3_ADDRESS   || env.VITE_SIMPLE_CREDIT_ENGINE_ADDRESS || "",
+  loanPool:         env.VITE_LOAN_POOL_V3_ADDRESS        || env.VITE_LOAN_POOL_ADDRESS            || "",
+  delegation:       env.VITE_DELEGATION_V2_ADDRESS       || env.VITE_DELEGATION_ADDRESS           || "",
+  reputation:       env.VITE_REPUTATION_REGISTRY_ADDRESS || "",
+  governance:       env.VITE_GOVERNANCE_ADDRESS          || "",
+  nft:              env.VITE_CREDIT_NFT_ADDRESS          || "",
+  multiAssetPool:   env.VITE_MULTI_ASSET_LOAN_POOL_ADDRESS || "",
+  crossChainBridge: env.VITE_CROSS_CHAIN_CREDIT_BRIDGE_ADDRESS || "",
   // Flags so UI can show which version is active
-  isV3Engine:     !!env.VITE_CREDIT_ENGINE_V3_ADDRESS,
-  isV3Pool:       !!env.VITE_LOAN_POOL_V3_ADDRESS,
-  isV2Delegation: !!env.VITE_DELEGATION_V2_ADDRESS,
+  isV3Engine:       !!env.VITE_CREDIT_ENGINE_V3_ADDRESS,
+  isV3Pool:         !!env.VITE_LOAN_POOL_V3_ADDRESS,
+  isV2Delegation:   !!env.VITE_DELEGATION_V2_ADDRESS,
+  hasWave5:         !!env.VITE_MULTI_ASSET_LOAN_POOL_ADDRESS,
 } as const;
+
+export const TASK_MANAGER_ADDRESS = "0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9";
 
 // ── Contract factory helpers ──────────────────────────────────────────────────
 
@@ -55,6 +63,10 @@ export function getReputationContract(signerOrProvider: ethers.Signer | ethers.P
   return new ethers.Contract(ADDRESSES.reputation, REPUTATION_REGISTRY_ABI, signerOrProvider);
 }
 
+export function getTaskManagerContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  return new ethers.Contract(TASK_MANAGER_ADDRESS, TASK_MANAGER_ABI, signerOrProvider);
+}
+
 export function getGovernanceContract(signerOrProvider: ethers.Signer | ethers.Provider) {
   if (!ADDRESSES.governance) return null;
   return new ethers.Contract(ADDRESSES.governance, GOVERNANCE_ABI, signerOrProvider);
@@ -63,6 +75,16 @@ export function getGovernanceContract(signerOrProvider: ethers.Signer | ethers.P
 export function getCreditNFTContract(signerOrProvider: ethers.Signer | ethers.Provider) {
   if (!ADDRESSES.nft) return null;
   return new ethers.Contract(ADDRESSES.nft, CREDIT_NFT_ABI, signerOrProvider);
+}
+
+export function getMultiAssetLoanPoolContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  if (!ADDRESSES.multiAssetPool) return null;
+  return new ethers.Contract(ADDRESSES.multiAssetPool, MULTI_ASSET_LOAN_POOL_ABI, signerOrProvider);
+}
+
+export function getCrossChainBridgeContract(signerOrProvider: ethers.Signer | ethers.Provider) {
+  if (!ADDRESSES.crossChainBridge) return null;
+  return new ethers.Contract(ADDRESSES.crossChainBridge, CROSS_CHAIN_BRIDGE_ABI, signerOrProvider);
 }
 
 // ── Score formula (client-side preview — matches on-chain formula exactly) ───
@@ -97,7 +119,7 @@ export function getOfferStatusLabel(status: number): string {
 }
 
 export function getBondStatusLabel(status: number): string {
-  return ["Active", "Repaid", "Defaulted"][status] ?? "Unknown";
+  return ["Pending Approval", "Active", "Repaid", "Defaulted", "Rejected"][status] ?? "Unknown";
 }
 
 // ── Error parsing ─────────────────────────────────────────────────────────────

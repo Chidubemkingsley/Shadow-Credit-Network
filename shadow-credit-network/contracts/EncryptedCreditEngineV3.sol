@@ -37,6 +37,7 @@ contract EncryptedCreditEngineV3 is Ownable {
     event ApprovalCheckResolved(bytes32 indexed checkId, address indexed user, bool approved);
     event ContractAuthorized(address indexed contractAddr);
     event ContractRevoked(address indexed contractAddr);
+    event ScorePublished(address indexed user, uint32 score);
     event ScoreAccessGranted(address indexed user, address indexed recipient);
     event ReputationRegistrySet(address indexed registry);
 
@@ -104,6 +105,9 @@ contract EncryptedCreditEngineV3 is Ownable {
     euint32 public minBorrowScore;
 
     address[] public registeredUsers;
+
+    // NEW: user-published plaintext scores (bridge fallback when FHE.decrypt unavailable)
+    mapping(address => uint32) public publishedScore;
 
     // NEW: optional ReputationRegistry integration
     address public reputationRegistry;
@@ -304,6 +308,22 @@ contract EncryptedCreditEngineV3 is Ownable {
         if (!hasCreditScore[_user]) return (0, false);
         (uint256 value, bool decrypted) = FHE.getDecryptResultSafe(encCreditScore[_user]);
         return (uint32(value), decrypted);
+    }
+
+    /// @notice Publish your SDK-decrypted score on-chain for cross-chain bridging.
+    /// @dev The CoFHE TaskManager on Arbitrum Sepolia doesn't support createDecryptTask,
+    ///      so FHE.decrypt() always reverts. Users SDK-decrypt their score in-browser,
+    ///      then call this to make it available for the bridge.
+    function publishScore(uint32 _score) external {
+        if (!hasCreditScore[msg.sender]) revert NoCreditData();
+        require(_score >= 300 && _score <= 850, "Score must be 300-850");
+        publishedScore[msg.sender] = _score;
+        emit ScorePublished(msg.sender, _score);
+    }
+
+    /// @notice Read a user's published score (0 if not published).
+    function getPublishedScore(address _user) external view returns (uint32) {
+        return publishedScore[_user];
     }
 
     // ──────────────────────────────────────────────────────────────────

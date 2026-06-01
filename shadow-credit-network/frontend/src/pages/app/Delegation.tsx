@@ -181,7 +181,7 @@ export default function Delegation() {
         <div className="glass rounded-2xl p-12 text-center space-y-4">
           <div className="text-4xl">🤝</div>
           <h2 className="text-2xl font-bold font-heading">Connect Your Wallet</h2>
-          <p className="text-muted-foreground">Connect to Base Sepolia to access the delegation market.</p>
+          <p className="text-muted-foreground">Connect to Arbitrum Sepolia to access the delegation market.</p>
         </div>
       </div>
     );
@@ -258,7 +258,7 @@ export default function Delegation() {
             className="glass rounded-xl p-3 border border-success/30 flex items-center gap-2 text-xs text-success">
             <CheckCircle2 className="w-4 h-4" />
             Transaction confirmed:
-            <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
+            <a href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
               {txHash.slice(0, 20)}…
             </a>
           </motion.div>
@@ -455,7 +455,8 @@ export default function Delegation() {
                         <span className={cn(
                           "text-xs px-2 py-0.5 rounded-full font-semibold",
                           bond.status === 0 ? "bg-primary/10 text-primary" :
-                          bond.status === 1 ? "bg-success/10 text-success" :
+                          bond.status === 1 ? "bg-primary/10 text-primary" :
+                          bond.status === 2 ? "bg-success/10 text-success" :
                           "bg-destructive/10 text-destructive"
                         )}>
                           {bond.statusLabel}
@@ -558,7 +559,7 @@ export default function Delegation() {
                         </div>
                       )}
 
-                      {isV2 && bond.isExpired && bond.status === 0 && (
+                      {isV2 && bond.isExpired && bond.status === 1 && (
                         <Button
                           size="sm"
                           variant="outline"

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Vote, Plus, CheckCircle, XCircle, Clock, Gavel, Shield, AlertTriangle, RefreshCw } from "lucide-react";
+import { Vote, Plus, CheckCircle, XCircle, Clock, Gavel, Shield, AlertTriangle, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/wallet";
 import { getGovernanceContract, ADDRESSES } from "@/lib/contracts";
@@ -83,6 +83,8 @@ export default function Governance() {
   const [canPropose, setCanPropose] = useState(false);
   const [form, setForm] = useState({ type: 0, description: "", param: "" });
   const [now, setNow] = useState(Date.now());
+  const [revealedScore, setRevealedScore] = useState<number | null>(null);
+  const [scoreInput, setScoreInput] = useState("");
 
   // ── Tick for countdown ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -119,9 +121,14 @@ export default function Governance() {
     try {
       const gov = getGovernanceContract(provider);
       if (!gov) return;
-      const [eli, cp] = await Promise.all([gov.isEligibleVoter(address), gov.isEligibleProposer(address)]);
+      const [eli, cp, gs] = await Promise.all([
+        gov.isEligibleVoter(address),
+        gov.isEligibleProposer(address),
+        gov.governanceScores(address),
+      ]);
       setEligibility({ eligible: eli.eligible, weight: eli.weight, tier: Number(eli.tier) });
       setCanPropose(cp);
+      setRevealedScore(gs > 0 ? Number(gs) : null);
       // Check which proposals current user has voted on
       const voted = new Set<number>();
       for (const p of proposals) {
@@ -134,6 +141,41 @@ export default function Governance() {
 
   useEffect(() => { loadProposals(); }, [loadProposals]);
   useEffect(() => { loadEligibility(); }, [loadEligibility]);
+
+  // ── Submit / Reset governance score ────────────────────────────────────────
+  async function submitGovernanceScore() {
+    if (!signer || !ADDRESSES.governance || !scoreInput) return;
+    setTxLoading(true); setError("");
+    try {
+      const gov = getGovernanceContract(signer);
+      if (!gov) throw new Error("Contract not available");
+      const tx = await gov.submitGovernanceScore(Number(scoreInput));
+      await tx.wait();
+      setScoreInput("");
+      await loadEligibility();
+    } catch (e: any) {
+      setError(parseContractError(e));
+    } finally {
+      setTxLoading(false);
+    }
+  }
+
+  async function resetGovernanceScore() {
+    if (!signer || !ADDRESSES.governance) return;
+    setTxLoading(true); setError("");
+    try {
+      const gov = getGovernanceContract(signer);
+      if (!gov) throw new Error("Contract not available");
+      const tx = await gov.resetGovernanceScore();
+      await tx.wait();
+      setRevealedScore(null);
+      await loadEligibility();
+    } catch (e: any) {
+      setError(parseContractError(e));
+    } finally {
+      setTxLoading(false);
+    }
+  }
 
   // ── Propose ────────────────────────────────────────────────────────────────
   async function submitProposal() {
@@ -205,7 +247,7 @@ export default function Governance() {
           <p className="text-muted-foreground">Score-gated proposals. Voting power scales with your credit tier.</p>
           {ADDRESSES.governance && (
             <p className="text-xs font-mono text-muted-foreground mt-1">
-              Contract: <a href={`https://sepolia.basescan.org/address/${ADDRESSES.governance}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">{ADDRESSES.governance.slice(0,8)}…{ADDRESSES.governance.slice(-6)}</a>
+              Contract:             <a href={`https://sepolia.arbiscan.io/address/${ADDRESSES.governance}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">{ADDRESSES.governance.slice(0,8)}…{ADDRESSES.governance.slice(-6)}</a>
             </p>
           )}
         </div>
@@ -245,6 +287,44 @@ export default function Governance() {
         <div>
           <div className="text-xs text-muted-foreground mb-1">Can Propose</div>
           <div className={`font-bold text-sm ${canPropose ? "text-success" : "text-muted-foreground"}`}>{isConnected ? (canPropose ? "Yes" : "No") : "—"}</div>
+        </div>
+      </motion.div>
+
+      {/* Voluntary Score Reveal — opt-in governance eligibility */}
+      <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.17 }}
+        className="glass rounded-2xl p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-violet-400"/>
+            <span className="text-sm font-semibold">Governance Score</span>
+          </div>
+          {revealedScore !== null && (
+            <span className="text-xs text-muted-foreground">Revealed score: {revealedScore}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The CoFHE on-chain decryption path is currently unavailable. 
+          Decrypt your score privately on the Reputation page, then submit it here to become governance-eligible.
+          Accepts both credit scores (300–850) and reputation basis points (0–10000).
+          Your score lives on-chain only while you want it — call <strong>Reset</strong> to remove it.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input type="number" min={300} max={850}
+            className="w-28 bg-muted rounded-lg px-3 py-2 text-sm border border-border focus:outline-none focus:border-primary"
+            placeholder="e.g. 5000" value={scoreInput}
+            onChange={e => setScoreInput(e.target.value)} disabled={txLoading}/>
+          <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
+            disabled={!isConnected || txLoading || !scoreInput || Number(scoreInput) < 300}
+            onClick={submitGovernanceScore}>
+            {txLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Eye className="w-3 h-3"/>}
+            Submit Score
+          </Button>
+          {revealedScore !== null && (
+            <Button size="sm" variant="outline" className="gap-2 text-destructive"
+              disabled={!isConnected || txLoading} onClick={resetGovernanceScore}>
+              <EyeOff className="w-3 h-3"/>Reset
+            </Button>
+          )}
         </div>
       </motion.div>
 

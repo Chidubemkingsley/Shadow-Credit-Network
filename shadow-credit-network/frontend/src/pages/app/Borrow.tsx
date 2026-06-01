@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ── Wave 1 demo pool (Base Sepolia, plaintext approval, no FHE) ───────────────
-const W1_POOL_ADDRESS = import.meta.env.VITE_LOAN_POOL_ADDRESS ?? "0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69";
+// ── Wave 1 demo pool (plaintext approval, no FHE) ─────────────────────────────
+const W1_POOL_ADDRESS = import.meta.env.VITE_LOAN_POOL_ADDRESS ?? "";
 
 function useDemoPool() {
   const { signer, provider, address } = useWallet();
@@ -130,10 +130,10 @@ export default function Borrow() {
   const { profile, loadProfile } = useCreditEngine();
   const demo = useDemoPool();
 
-  // Demo mode: use Wave 1 pool on Base Sepolia when V3 FHE isn't available
+  // Demo mode: use Wave 1 pool when V3 FHE isn't available
   const canUseDemoMode = isV3 && !isFHENetwork;
   const [demoMode, setDemoMode] = useState(false);
-  // Auto-enable demo mode when on Base Sepolia + V3
+  // Auto-enable demo mode when V3 FHE isn't supported
   useEffect(() => { if (canUseDemoMode) setDemoMode(true); }, [canUseDemoMode]);
 
   const [fundAmount, setFundAmount] = useState("");
@@ -160,7 +160,7 @@ export default function Borrow() {
         <div className="glass rounded-2xl p-12 text-center space-y-4">
           <div className="text-4xl">💰</div>
           <h2 className="text-2xl font-bold font-heading">Connect Your Wallet</h2>
-          <p className="text-muted-foreground">Connect to Base Sepolia to access lending and borrowing.</p>
+          <p className="text-muted-foreground">Connect to Arbitrum Sepolia to access lending and borrowing.</p>
         </div>
       </div>
     );
@@ -242,7 +242,7 @@ export default function Borrow() {
           className="glass rounded-xl p-4 border border-primary/30 flex items-start gap-3">
           <FlaskConical className="w-4 h-4 text-primary mt-0.5 shrink-0" />
           <div className="flex-1 text-xs space-y-1">
-            <div className="font-semibold text-primary">Demo Mode — Wave 1 Pool (Base Sepolia)</div>
+            <div className="font-semibold text-primary">Demo Mode — Wave 1 Pool</div>
             <p className="text-muted-foreground">
               Using <code className="bg-muted px-1 rounded">PrivateLoanPool</code> at{" "}
               <code className="bg-muted px-1 rounded font-mono">{W1_POOL_ADDRESS.slice(0, 10)}…</code>.
@@ -302,7 +302,7 @@ export default function Borrow() {
             className="glass rounded-xl p-3 border border-success/30 flex items-center gap-2 text-xs text-success">
             <CheckCircle2 className="w-4 h-4" />
             Transaction confirmed:
-            <a href={`https://sepolia.basescan.org/tx/${activeTxHash}`} target="_blank" rel="noreferrer"
+            <a href={`https://sepolia.arbiscan.io/tx/${activeTxHash}`} target="_blank" rel="noreferrer"
               className="underline font-mono text-primary">{activeTxHash.slice(0, 20)}…</a>
           </motion.div>
         )}
@@ -408,7 +408,7 @@ export default function Borrow() {
                 ? "Wave 1 pool — plaintext approval, instant disburse. No FHE required."
                 : isV3 && isFHENetwork
                 ? "FHE approval: score compared via ebool — ETH disbursed only when approved."
-                : "Switch to Demo Mode or Fhenix Helium for full borrow flow."}
+                : "Switch to Demo Mode or Arbitrum Sepolia for full borrow flow."}
             </p>
           </div>
         </TabsContent>

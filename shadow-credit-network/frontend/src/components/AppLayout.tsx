@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, Send, Wallet, Handshake, Star, Plug, AlertTriangle, Vote } from "lucide-react";
+import { BarChart3, Send, Wallet, Handshake, Star, Plug, AlertTriangle, Vote, Layers, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/lib/wallet";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ const navItems = [
   { to: "/app/delegation", icon: Handshake, label: "Delegation" },
   { to: "/app/reputation", icon: Star,      label: "Reputation" },
   { to: "/app/governance", icon: Vote,      label: "Governance", wave4: true },
+  { to: "/app/multi-asset", icon: Layers,  label: "Multi-Asset", wave5: true },
+  { to: "/app/bridge",     icon: ArrowRightLeft, label: "Bridge", wave5: true },
 ];
 
 export default function AppLayout() {
@@ -30,7 +32,7 @@ export default function AppLayout() {
         <div className="px-3 mb-2">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <div className={cn("w-2 h-2 rounded-full", isConnected && !isWrongNetwork ? "bg-success" : "bg-muted-foreground")} />
-            Base Sepolia
+            Arbitrum Sepolia
           </div>
         </div>
 
@@ -54,6 +56,9 @@ export default function AppLayout() {
               <span className="flex-1">{item.label}</span>
               {(item as any).wave4 && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">W4</span>
+              )}
+              {(item as any).wave5 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400">W5</span>
               )}
             </NavLink>
           ))}
@@ -98,6 +103,18 @@ export default function AppLayout() {
               {ADDRESSES.nft ? "W4" : "—"}
             </span>
           </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="text-muted-foreground">Multi-Asset</span>
+            <span className={cn("px-1.5 py-0.5 rounded text-xs font-mono", ADDRESSES.multiAssetPool ? "bg-cyan-500/15 text-cyan-400" : "bg-muted text-muted-foreground")}>
+              {ADDRESSES.multiAssetPool ? "W5" : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Bridge</span>
+            <span className={cn("px-1.5 py-0.5 rounded text-xs font-mono", ADDRESSES.crossChainBridge ? "bg-cyan-500/15 text-cyan-400" : "bg-muted text-muted-foreground")}>
+              {ADDRESSES.crossChainBridge ? "W5" : "—"}
+            </span>
+          </div>
         </div>
 
         {/* Wallet section */}
@@ -109,7 +126,7 @@ export default function AppLayout() {
                 Wrong network
               </div>
               <Button size="sm" variant="outline" className="w-full text-xs" onClick={switchNetwork}>
-                Switch to Base Sepolia
+                Switch to Arbitrum Sepolia
               </Button>
             </div>
           ) : isConnected && address ? (

@@ -3,25 +3,27 @@ pragma solidity ^0.8.25;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @notice Minimal OApp interface — LayerZero V2 endpoint interface subset
-/// @dev In production, inherit from OApp (layerzerolabs/lz-evm-oapp-v2)
-///      For Wave 4 we define minimal interfaces to avoid adding
-///      the full LayerZero dependency to the Hardhat project.
-///      The actual LZ integration uses these same function signatures.
-interface ILayerZeroEndpoint {
-    function send(
-        uint32  dstEid,        // destination endpoint ID
-        bytes calldata message,
-        bytes calldata options,
-        address refundAddress
-    ) external payable returns (bytes32 guid);
+/// @notice LayerZero V2 SendParam struct (matching deployed Arbitrum Sepolia endpoint).
+struct SendParam {
+    uint32  dstEid;
+    bytes32 receiver;
+    bytes   message;
+    bytes   options;
+    bool    payInLzToken;
+}
 
-    function quote(
-        uint32  dstEid,
-        bytes calldata message,
-        bytes calldata options,
-        bool    payInLzToken
-    ) external view returns (uint256 nativeFee, uint256 lzTokenFee);
+/// @notice LayerZero V2 MessagingFee struct.
+struct MessagingFee {
+    uint256 nativeFee;
+    uint256 lzTokenFee;
+}
+
+/// @notice Minimal LZ V2 endpoint interface (matches deployed Arbitrum Sepolia endpoint).
+interface ILayerZeroEndpoint {
+    function quote(SendParam calldata _sendParam, address _payInLzToken)
+        external view returns (MessagingFee memory msgFee);
+    function send(SendParam calldata _sendParam, bytes calldata _extraOptions, address _refundAddress)
+        external payable returns (bytes32 msgHash);
 }
 
 interface ILayerZeroReceiver {
@@ -39,6 +41,7 @@ interface ICreditEngineForBridge {
     function hasCreditScore(address user) external view returns (bool);
     function isScoreStale(address user) external view returns (bool);
     function getDecryptedScore(address user) external view returns (uint32 score, bool isDecrypted);
+    function getPublishedScore(address user) external view returns (uint32);
     function scoreComputedAt(address user) external view returns (uint256);
     function getScoreHistoryLength(address user) external view returns (uint256);
     function isRegistered(address user) external view returns (bool);
@@ -187,39 +190,58 @@ contract CrossChainCreditBridge is Ownable, ILayerZeroReceiver {
     /// @notice Quote the LZ messaging fee for sending a score to dstEid.
     function quoteSend(uint32 dstEid) external view returns (uint256 nativeFee) {
         require(address(endpoint) != address(0), "No endpoint");
+        bytes32 receiver = trustedRemotes[dstEid];
+        require(receiver != bytes32(0), "No trusted remote for dstEid");
         ScoreAttestation memory att = _buildAttestation(msg.sender, dstEid);
         bytes memory payload = abi.encode(att);
         bytes memory options = _defaultOptions();
-        (nativeFee, ) = endpoint.quote(dstEid, payload, options, false);
+        SendParam memory sp = SendParam({
+            dstEid: dstEid,
+            receiver: receiver,
+            message: payload,
+            options: options,
+            payInLzToken: false
+        });
+        MessagingFee memory fee = endpoint.quote(sp, address(0));
+        nativeFee = fee.nativeFee;
     }
 
     /// @notice Bridge your decrypted credit score to a destination chain.
     /// @param dstEid The LayerZero destination endpoint ID.
     function sendScore(uint32 dstEid) external payable {
-        require(trustedRemotes[dstEid] != bytes32(0), "No trusted remote for dstEid");
+        bytes32 receiver = trustedRemotes[dstEid];
+        require(receiver != bytes32(0), "No trusted remote for dstEid");
         require(address(creditEngine) != address(0), "No credit engine");
         require(creditEngine.isRegistered(msg.sender), "Not registered");
 
         if (!creditEngine.hasCreditScore(msg.sender)) revert NoCreditScore();
         if (creditEngine.isScoreStale(msg.sender))    revert StaleScore();
 
-        (uint32 score, bool isDecrypted) = creditEngine.getDecryptedScore(msg.sender);
-        if (!isDecrypted || score == 0)                revert NotDecrypted();
+        // Accept either on-chain FHE-decrypted score or user-published score
+        uint32 score = creditEngine.getPublishedScore(msg.sender);
+        bool hasPublished = score != 0;
+        if (!hasPublished) {
+            (score, ) = creditEngine.getDecryptedScore(msg.sender);
+        }
+        if (score == 0) revert NotDecrypted();
 
         ScoreAttestation memory att = _buildAttestation(msg.sender, dstEid);
         bytes memory payload = abi.encode(att);
         bytes memory options = _defaultOptions();
 
-        // Quote and enforce fee
-        (uint256 nativeFee, ) = endpoint.quote(dstEid, payload, options, false);
-        if (msg.value < nativeFee) revert InsufficientFee();
+        SendParam memory sp = SendParam({
+            dstEid: dstEid,
+            receiver: receiver,
+            message: payload,
+            options: options,
+            payInLzToken: false
+        });
 
-        bytes32 guid = endpoint.send{value: msg.value}(
-            dstEid,
-            payload,
-            options,
-            msg.sender   // refund address
-        );
+        // Quote and enforce fee
+        MessagingFee memory fee = endpoint.quote(sp, address(0));
+        if (msg.value < fee.nativeFee) revert InsufficientFee();
+
+        bytes32 guid = endpoint.send{value: msg.value}(sp, "", msg.sender);
 
         emit ScoreSent(
             msg.sender,
@@ -333,7 +355,12 @@ contract CrossChainCreditBridge is Ownable, ILayerZeroReceiver {
     function _buildAttestation(address user, uint32 /* dstEid */)
         internal view returns (ScoreAttestation memory att)
     {
-        (uint32 score, ) = creditEngine.getDecryptedScore(user);
+        // Prefer published score if available (user SDK-decrypted and submitted on-chain)
+        // Fall back to FHE.getDecryptResultSafe for networks that support on-chain decrypt.
+        uint32 score = creditEngine.getPublishedScore(user);
+        if (score == 0) {
+            (score, ) = creditEngine.getDecryptedScore(user);
+        }
         uint256 computedAt = creditEngine.scoreComputedAt(user);
         uint256 histLen    = creditEngine.getScoreHistoryLength(user);
 
@@ -356,15 +383,15 @@ contract CrossChainCreditBridge is Ownable, ILayerZeroReceiver {
     }
 
     /// @notice Default LZ options: executor gas = 200_000, no airdrop.
+    /// @dev LZ V2 TYPE_3 executor option encoding:
+    ///   [uint16 TYPE_3][uint8 workerID][uint16 optionLen][uint8 optionType][uint128 gas]
     function _defaultOptions() internal pure returns (bytes memory) {
-        // LZ V2 options encoding: type 3 (executor lzReceive option)
-        // See: https://docs.layerzero.network/v2/developers/evm/gas-settings/options
-        // Encoding: 0x0003 (type) + 0x01 (lzReceive) + gas (uint128) + value (uint128)
         return abi.encodePacked(
-            uint16(3),   // option type
-            uint8(1),    // lzReceive
-            uint128(200_000), // gas limit
-            uint128(0)   // msg.value to forward
+            uint16(3),        // TYPE_3
+            uint8(1),         // EXECUTOR_WORKER_ID
+            uint16(17),       // optionLen = 1 (type byte) + 16 (gas uint128) = 17
+            uint8(1),         // OPTION_TYPE_LZRECEIVE
+            uint128(200_000)  // gasLimit for lzReceive
         );
     }
 

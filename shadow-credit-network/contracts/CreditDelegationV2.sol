@@ -9,6 +9,16 @@ interface IReputationForDelegation {
     function notifyActivity(address user) external;
 }
 
+/// @notice Minimal credit engine interface — requestApprovalCheck + resolveApprovalCheck
+interface ICreditEngineForDelegation {
+    function hasCreditScore(address user) external view returns (bool);
+    function isScoreStale(address user) external view returns (bool);
+    function requestApprovalCheck(address user, uint256 minScore)
+        external returns (bytes32 checkId, uint256 eboolCtHash);
+    function resolveApprovalCheck(bytes32 checkId)
+        external returns (bool ready, bool approved);
+}
+
 /// @title CreditDelegationV2
 /// @notice Wave 3 upgrade of CreditDelegation. Key fixes over V1:
 ///
@@ -26,9 +36,10 @@ interface IReputationForDelegation {
 ///   4. Bond expiry — bonds have a dueDate. After expiry, anyone can call
 ///      markExpiredDefault(bondId) to mark it defaulted without owner action.
 ///
-///   5. Credit score check on acceptOffer — if a credit engine is wired in,
-///      acceptOffer() verifies the borrower's score meets minCreditScore before
-///      creating the bond. This was missing in V1.
+///   5. FHE-gated credit check — acceptOffer() kicks off an ebool approval
+///      check via the engine's requestApprovalCheck(). The bond starts in
+///      PendingApproval state. resolveCreditCheck() resolves the ebool and
+///      activates (or cancels) the bond. No plaintext bypass.
 contract CreditDelegationV2 is Ownable {
 
     // ──────────────────────────────────────────────
@@ -38,6 +49,7 @@ contract CreditDelegationV2 is Ownable {
     event DelegationOfferCreated(address indexed delegator, uint256 offerId);
     event DelegationOfferCancelled(address indexed delegator, uint256 offerId);
     event DelegationAccepted(address indexed delegator, address indexed borrower, uint256 offerId, uint256 bondId);
+    event CreditCheckResolved(uint256 indexed bondId, bool approved);
     event DelegationRepaid(address indexed borrower, uint256 bondId, uint256 amount, bool fullRepayment);
     event DelegationDefaulted(address indexed delegator, address indexed borrower, uint256 bondId);
     event YieldPaidOut(address indexed delegator, uint256 bondId, uint256 amount);
@@ -60,13 +72,17 @@ contract CreditDelegationV2 is Ownable {
     error InsufficientCreditScore();
     error BondNotExpired();
     error NoYieldToClaim();
+    error NoCreditScore();
+    error StaleScore();
+    error ApprovalNotRequested();
+    error ApprovalAlreadyResolved();
 
     // ──────────────────────────────────────────────
     //  Enums
     // ──────────────────────────────────────────────
 
     enum OfferStatus { Active, Cancelled, Exhausted }
-    enum BondStatus  { Active, Repaid, Defaulted }
+    enum BondStatus  { PendingApproval, Active, Repaid, Defaulted, Rejected }
 
     // ──────────────────────────────────────────────
     //  Structs
@@ -95,8 +111,10 @@ contract CreditDelegationV2 is Ownable {
         uint256    paidOutYield;        // yield already transferred to delegator
         uint256    yieldRate;           // absolute yield per unit (pre-computed)
         uint256    createdAt;
-        uint256    dueDate;             // NEW: bond expiry timestamp
+        uint256    dueDate;
         BondStatus status;
+        bytes32    approvalCheckId;     // ebool check ID from engine
+        uint256    approvalEboolCtHash; // ebool ciphertext handle
     }
 
     // ──────────────────────────────────────────────
@@ -110,7 +128,7 @@ contract CreditDelegationV2 is Ownable {
 
     IReputationForDelegation public reputationRegistry;
 
-    // Minimal credit engine interface — only needs checkCreditThreshold
+    // Credit engine for FHE-gated approval checks
     address public creditEngine;
 
     // Default bond duration if not specified (30 days)
@@ -161,7 +179,7 @@ contract CreditDelegationV2 is Ownable {
         emit DelegationOfferCancelled(msg.sender, _offerId);
     }
 
-    /// @notice Accept a delegation offer and create a bond.
+    /// @notice Accept a delegation offer and kick off FHE approval check.
     /// @param _offerId  The offer to accept.
     /// @param _amount   Amount to delegate (must be <= offer.availableAmount).
     /// @param _duration Bond duration in seconds (0 = use defaultBondDuration).
@@ -174,14 +192,10 @@ contract CreditDelegationV2 is Ownable {
         if (offer.availableAmount < _amount)           revert OfferExhausted();
         if (offer.activeBondCount >= offer.maxBonds)   revert MaxBondsReached();
 
-        // NEW: credit score check if engine is wired in
-        if (creditEngine != address(0) && offer.minCreditScore > 0) {
-            (bool ok) = _checkCreditScore(msg.sender, offer.minCreditScore);
-            if (!ok) revert InsufficientCreditScore();
-        }
-
         uint256 duration = _duration > 0 ? _duration : defaultBondDuration;
         uint256 yieldShare = (_amount * offer.yieldRate) / 10000;
+
+        uint256 bondId = bonds.length;
 
         bonds.push(DelegationBond({
             delegator:        offer.delegator,
@@ -194,10 +208,11 @@ contract CreditDelegationV2 is Ownable {
             yieldRate:        yieldShare,
             createdAt:        block.timestamp,
             dueDate:          block.timestamp + duration,
-            status:           BondStatus.Active
+            status:           BondStatus.PendingApproval,
+            approvalCheckId:  bytes32(0),
+            approvalEboolCtHash: 0
         }));
 
-        uint256 bondId = bonds.length - 1;
         borrowerBonds[msg.sender].push(bondId);
 
         offer.totalDelegated  += _amount;
@@ -205,15 +220,67 @@ contract CreditDelegationV2 is Ownable {
         offer.activeBondCount++;
 
         emit DelegationAccepted(offer.delegator, msg.sender, _offerId, bondId);
+
+        // Kick off FHE approval check if engine is wired and minScore > 0
+        if (creditEngine != address(0) && offer.minCreditScore > 0) {
+            if (!ICreditEngineForDelegation(creditEngine).hasCreditScore(msg.sender))
+                revert NoCreditScore();
+            if (ICreditEngineForDelegation(creditEngine).isScoreStale(msg.sender))
+                revert StaleScore();
+
+            (bytes32 checkId, uint256 eboolCtHash) =
+                ICreditEngineForDelegation(creditEngine).requestApprovalCheck(
+                    msg.sender,
+                    offer.minCreditScore
+                );
+
+            DelegationBond storage bond = bonds[bondId];
+            bond.approvalCheckId     = checkId;
+            bond.approvalEboolCtHash = eboolCtHash;
+        } else {
+            // No engine or no minScore — activate immediately
+            bonds[bondId].status = BondStatus.Active;
+        }
     }
 
     // ──────────────────────────────────────────────
-    //  Bond Repayment — yield actually pays out now
+    //  Resolve FHE credit check
+    // ──────────────────────────────────────────────
+
+    /// @notice Resolve the FHE ebool approval check for a pending bond.
+    ///         Permissionless — anyone can call.
+    ///         If approved, bond becomes Active.
+    ///         If rejected, bond becomes Rejected and offer allocation is freed.
+    function resolveCreditCheck(uint256 _bondId) external {
+        if (_bondId >= bonds.length) revert BondNotFound();
+
+        DelegationBond storage bond = bonds[_bondId];
+        if (bond.status != BondStatus.PendingApproval) revert BondNotActive();
+        if (bond.approvalCheckId == bytes32(0))        revert ApprovalNotRequested();
+
+        (bool ready, bool approved) =
+            ICreditEngineForDelegation(creditEngine).resolveApprovalCheck(bond.approvalCheckId);
+        if (!ready) return; // FHE decryption not complete — retry later
+
+        if (approved) {
+            bond.status = BondStatus.Active;
+        } else {
+            bond.status = BondStatus.Rejected;
+            // Free the offer allocation
+            DelegationOffer storage offer = offers[bond.offerId];
+            offer.activeBondCount--;
+            offer.totalDelegated  -= bond.delegatedAmount;
+            offer.availableAmount += bond.delegatedAmount;
+        }
+
+        emit CreditCheckResolved(_bondId, approved);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Bond Repayment
     // ──────────────────────────────────────────────
 
     /// @notice Repay a delegation bond. Yield is forwarded to the delegator immediately.
-    /// @dev msg.value is split: principal portion reduces repaidAmount,
-    ///      yield portion is transferred to the delegator in the same tx.
     function repayBond(uint256 _bondId) external payable {
         if (_bondId >= bonds.length) revert BondNotFound();
 
@@ -231,7 +298,7 @@ contract CreditDelegationV2 is Ownable {
         bond.repaidAmount     += principalPortion;
         bond.accumulatedYield += yieldOnPayment;
 
-        // NEW: pay yield to delegator immediately
+        // Pay yield to delegator immediately
         if (yieldOnPayment > 0) {
             bond.paidOutYield += yieldOnPayment;
             (bool sent, ) = payable(bond.delegator).call{value: yieldOnPayment}("");
@@ -248,7 +315,6 @@ contract CreditDelegationV2 is Ownable {
             offer.activeBondCount--;
             offer.availableAmount += bond.delegatedAmount;
 
-            // NEW: notify reputation for both parties
             _notifyReputation(bond.borrower);
             _notifyReputation(bond.delegator);
         }
@@ -257,10 +323,7 @@ contract CreditDelegationV2 is Ownable {
     }
 
     // ──────────────────────────────────────────────
-    //  NEW: Bond Expiry Default
-    //
-    //  Anyone can call this after dueDate passes on an active bond.
-    //  Marks it defaulted without requiring owner action.
+    //  Bond Expiry Default
     // ──────────────────────────────────────────────
 
     function markExpiredDefault(uint256 _bondId) external {
@@ -274,13 +337,11 @@ contract CreditDelegationV2 is Ownable {
         DelegationOffer storage offer = offers[bond.offerId];
         offer.activeBondCount--;
 
-        // Notify reputation — default hurts borrower's DefaultHistory
         _notifyReputation(bond.borrower);
 
         emit DelegationDefaulted(bond.delegator, bond.borrower, _bondId);
     }
 
-    /// @notice Owner can also mark a bond defaulted (e.g. for fraud).
     function markDefaulted(uint256 _bondId) external onlyOwner {
         if (_bondId >= bonds.length) revert BondNotFound();
         DelegationBond storage bond = bonds[_bondId];
@@ -304,15 +365,6 @@ contract CreditDelegationV2 is Ownable {
         if (address(reputationRegistry) == address(0)) return;
         if (!reputationRegistry.isRegistered(user)) return;
         try reputationRegistry.notifyActivity(user) {} catch {}
-    }
-
-    function _checkCreditScore(address user, uint256 minScore) internal view returns (bool) {
-        // Minimal interface: checkCreditThreshold(address, uint256) returns (bool)
-        (bool success, bytes memory data) = creditEngine.staticcall(
-            abi.encodeWithSignature("checkCreditThreshold(address,uint256)", user, minScore)
-        );
-        if (!success || data.length == 0) return false;
-        return abi.decode(data, (bool));
     }
 
     // ──────────────────────────────────────────────
@@ -358,6 +410,17 @@ contract CreditDelegationV2 is Ownable {
     function getBondStatus(uint256 _bondId) external view returns (uint256) {
         if (_bondId >= bonds.length) revert BondNotFound();
         return uint256(bonds[_bondId].status);
+    }
+
+    /// @notice Get approval check details for a pending bond.
+    function getBondApproval(uint256 _bondId) external view returns (
+        bytes32 checkId,
+        uint256 eboolCtHash,
+        bool pending
+    ) {
+        if (_bondId >= bonds.length) revert BondNotFound();
+        DelegationBond storage b = bonds[_bondId];
+        return (b.approvalCheckId, b.approvalEboolCtHash, b.status == BondStatus.PendingApproval);
     }
 
     function getBorrowerBonds(address _borrower) external view returns (uint256[] memory) {

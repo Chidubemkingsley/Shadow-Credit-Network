@@ -32,14 +32,25 @@ export default function SubmitData() {
     if (isConnected && address) loadProfile();
   }, [isConnected, address, loadProfile]);
 
-  // V3: steps are Register → Compute Score (data submission is FHE-only)
-  // V1: steps are Register → Submit Data → Compute Score
-  const steps = isV3
-    ? [{ id: 0, label: "Register Wallet" }, { id: 1, label: "Compute Score" }]
-    : [{ id: 0, label: "Register Wallet" }, { id: 1, label: "Submit Data" }, { id: 2, label: "Compute Score" }];
+  // Steps are Register → Submit Data → Compute Score
+  const steps = [
+    { id: 0, label: "Register Wallet" },
+    { id: 1, label: "Submit Data" },
+    { id: 2, label: "Compute Score" }
+  ];
 
-  // Current step
-  const step = !profile.isRegistered ? 0 : !profile.hasCreditScore ? 1 : (isV3 ? 2 : 2);
+  // Current step based on on-chain state
+  // 1. If not registered: step 0
+  // 2. If registered but no score computed:
+  //    - If V3 and we just submitted data (completedStep 1): step 2
+  //    - Otherwise: step 1 (submit data)
+  // 3. If has score: step 2 (results)
+  const step = useMemo(() => {
+    if (!profile.isRegistered) return 0;
+    if (profile.hasCreditScore) return 2;
+    if (completedStep === 1) return 2;
+    return 1;
+  }, [profile.isRegistered, profile.hasCreditScore, completedStep]);
 
   const preview = useMemo(() => computeScorePreview(
     Number(data.paymentHistory) || 0,
@@ -61,7 +72,6 @@ export default function SubmitData() {
     setCompletedStep(0);
   };
 
-  // V1: submit data then compute
   const handleSubmit = async () => {
     const income = BigInt(Math.round(Number(data.income || 0) * 1e18));
     const totalDebt = BigInt(Math.round(Number(data.totalDebt || 0) * 1e18));
@@ -72,12 +82,6 @@ export default function SubmitData() {
       Number(data.accountAge),
       Number(data.numDefaults),
     );
-    setCompletedStep(1);
-  };
-
-  // V3: skip data submission, compute directly
-  const handleComputeV3 = async () => {
-    await computeScore();
     setCompletedStep(1);
   };
 
@@ -92,7 +96,7 @@ export default function SubmitData() {
         <div className="glass rounded-2xl p-12 text-center space-y-4">
           <div className="text-4xl">🔐</div>
           <h2 className="text-2xl font-bold font-heading">Connect Your Wallet</h2>
-          <p className="text-muted-foreground">Connect to Base Sepolia to submit credit data.</p>
+          <p className="text-muted-foreground">Connect to Arbitrum Sepolia to submit credit data.</p>
         </div>
       </div>
     );
@@ -104,7 +108,7 @@ export default function SubmitData() {
         <h1 className="text-3xl font-bold font-heading">Submit Credit Data</h1>
         <p className="text-muted-foreground mt-1">
           {isV3
-            ? "Wave 3 — FHE encrypted scoring on EncryptedCreditEngineV3"
+            ? "Wave 3 — Local local FHE encryption using @cofhe/sdk"
             : "Three on-chain transactions to compute your score"}
         </p>
       </div>
@@ -115,21 +119,12 @@ export default function SubmitData() {
           <div className="flex items-start gap-3">
             <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-primary">Wave 3 — EncryptedCreditEngineV3</p>
+              <p className="text-xs font-semibold text-primary">Wave 3 — Local FHE Encryption</p>
               <p className="text-xs text-muted-foreground">
-                Credit scores are computed entirely in the FHE domain. Data submission requires
-                real ciphertexts from the <code className="bg-muted px-1 rounded">@cofhe/sdk</code>.
-                For this demo, click <strong>Compute Score</strong> directly — the engine computes
-                on encrypted zero-initialized fields (score = 300, Aggressive pool eligible).
-                To submit real encrypted data, use <code className="bg-muted px-1 rounded">submitCreditDataEncrypted()</code>.
+                Your data is encrypted <strong>locally</strong> in your browser using the 
+                <code className="bg-muted px-1 rounded ml-1">@cofhe/sdk</code> before being sent to the blockchain.
+                Only you can see your plaintext data. The network only sees encrypted handles.
               </p>
-              <a
-                href="https://cofhe-docs.fhenix.zone/client-sdk/guides/encrypting-inputs"
-                target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                CoFHE SDK docs <ExternalLink className="w-3 h-3" />
-              </a>
             </div>
           </div>
         </div>
@@ -175,9 +170,9 @@ export default function SubmitData() {
             className="glass rounded-xl p-3 border border-success/30 flex items-center gap-2 text-xs text-success">
             <CheckCircle2 className="w-4 h-4" />
             {completedStep === 0 && "Wallet registered successfully! "}
-            {completedStep === 1 && (isV3 ? "Score computed on V3 engine! " : "Credit data submitted! ")}
+            {completedStep === 1 && (isV3 ? "Encrypted data submitted to V3 Engine! " : "Credit data submitted! ")}
             {completedStep === 2 && "Credit score computed successfully! "}
-            <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer"
+            <a href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer"
               className="underline font-mono text-primary">{txHash.slice(0, 20)}…</a>
           </motion.div>
         )}
@@ -210,50 +205,9 @@ export default function SubmitData() {
           </motion.div>
         )}
 
-        {/* ── V3 Step 1: Compute directly ── */}
-        {isV3 && step === 1 && (
-          <motion.div key="step1-v3"
-            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="glass rounded-xl p-4 border border-success/20 flex items-center gap-2 text-xs text-success">
-              <CheckCircle2 className="w-4 h-4" /> Wallet registered on EncryptedCreditEngineV3
-            </div>
-
-            <div className="glass rounded-2xl p-8 text-center space-y-6">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-                <span className="text-xl">🧮</span>
-              </div>
-              <div>
-                <h3 className="font-heading font-bold text-lg">Compute Credit Score</h3>
-                <p className="text-muted-foreground text-sm mt-1">
-                  Runs the FHE scoring formula on-chain. Score is computed in the encrypted domain
-                  — no plaintext is ever exposed.
-                </p>
-              </div>
-
-              <div className="glass rounded-xl p-4 border border-primary/10 text-xs text-muted-foreground text-left space-y-1">
-                <div className="font-semibold text-primary mb-2">What happens on-chain:</div>
-                <div>1. <code className="bg-muted px-1 rounded">FHE.gte(encCreditScore, threshold)</code> → <code className="bg-muted px-1 rounded">ebool</code></div>
-                <div>2. <code className="bg-muted px-1 rounded">FHE.decrypt(ebool)</code> → async decryption</div>
-                <div>3. <code className="bg-muted px-1 rounded">getDecryptResultSafe()</code> → poll until ready</div>
-                <div>4. Score stored as <code className="bg-muted px-1 rounded">euint32</code> ciphertext handle</div>
-              </div>
-
-              <Button onClick={handleComputeV3} disabled={loading}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8">
-                {loading
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Computing on-chain…</>
-                  : <>Compute Score On-Chain <ArrowRight className="w-4 h-4" /></>
-                }
-              </Button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── V1 Step 1: Submit data ── */}
-        {!isV3 && step === 1 && (
-          <motion.div key="step1-v1"
+        {/* ── Step 1: Submit data (V1 and V3) ── */}
+        {step === 1 && (
+          <motion.div key="step1"
             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
             className="space-y-6"
           >
@@ -263,7 +217,7 @@ export default function SubmitData() {
 
             <div className="grid gap-4">
               {[
-                { key: "income",            label: "Annual Income (ETH)",   hint: "e.g. 5.0 — converted to wei on-chain" },
+                { key: "income",            label: "Annual Income (ETH)",   hint: "e.g. 5.0 — converted to wei" },
                 { key: "totalDebt",         label: "Total Debt (ETH)",      hint: "e.g. 1.5 — outstanding debt" },
                 { key: "paymentHistory",    label: "Payment History",       hint: "0–10000 bps (10000 = 100% on-time)" },
                 { key: "creditUtilization", label: "Credit Utilization",    hint: "0–10000 bps (lower is better)" },
@@ -298,58 +252,66 @@ export default function SubmitData() {
             <Button onClick={handleSubmit} disabled={!valid || loading}
               className="bg-primary text-primary-foreground hover:bg-primary/90 w-full gap-2">
               {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming in wallet…</>
-                : <>Submit Data On-Chain <ArrowRight className="w-4 h-4" /></>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {isV3 ? "Encrypting Locally..." : "Confirming in wallet…"}</>
+                : <>{isV3 ? "Encrypt & Submit Data" : "Submit Data On-Chain"} <ArrowRight className="w-4 h-4" /></>
               }
             </Button>
           </motion.div>
         )}
 
-        {/* ── V1 Step 2: Compute score ── */}
-        {!isV3 && step === 2 && (
-          <motion.div key="step2-v1"
+        {/* ── Step 2: Compute score ── */}
+        {step === 2 && (
+          <motion.div key="step2"
             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
             className="space-y-6"
           >
             <div className="glass rounded-xl p-4 border border-success/20 flex items-center gap-2 text-xs text-success">
-              <CheckCircle2 className="w-4 h-4" /> Credit data submitted successfully
+              <CheckCircle2 className="w-4 h-4" /> {isV3 ? "Encrypted data submitted" : "Credit data submitted"}
             </div>
 
             <div className="glass rounded-2xl p-8 text-center space-y-6">
-              {profile.score !== null ? (
+              {profile.hasCreditScore ? (
                 <>
-                  <div className="relative w-32 h-32 mx-auto">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
-                      <circle cx="50" cy="50" r="42" fill="none"
-                        stroke="hsl(var(--primary))" strokeWidth="8" strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 42}`}
-                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - ((profile.score - 300) / 550))}`}
-                        className="transition-all duration-1000" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-3xl font-bold font-heading text-primary">{profile.score}</span>
-                    </div>
-                  </div>
-                  <div className={cn("text-lg font-bold font-heading", profile.riskColor)}>{profile.riskTier}</div>
-                  <div className="flex gap-3 justify-center flex-wrap">
-                    {!profile.isDecrypted && (
-                      <Button variant="outline" size="sm" onClick={requestDecryption} disabled={loading}>
-                        {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                        Request Decryption
-                      </Button>
-                    )}
-                    {profile.isDecrypted && (
-                      <div className="text-xs text-success flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Score decrypted
+                  {profile.score !== null ? (
+                    <>
+                      <div className="relative w-32 h-32 mx-auto">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
+                          <circle cx="50" cy="50" r="42" fill="none"
+                            stroke="hsl(var(--primary))" strokeWidth="8" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 42}`}
+                            strokeDashoffset={`${2 * Math.PI * 42 * (1 - ((profile.score - 300) / 550))}`}
+                            className="transition-all duration-1000" />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-3xl font-bold font-heading text-primary">{profile.score}</span>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                      <div className={cn("text-lg font-bold font-heading", profile.riskColor)}>{profile.riskTier}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {isV3 ? "🔐 Public Score (FHE Decrypted)" : "Score computed successfully"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                        <span className="text-2xl">🔐</span>
+                      </div>
+                      <p className="text-muted-foreground text-sm">
+                        Score is stored as FHE ciphertext on-chain.
+                        Click below to reveal it publicly.
+                      </p>
+                      <Button onClick={requestDecryption} disabled={loading}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Request Decryption"}
+                      </Button>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
                   <div className="text-5xl font-bold font-heading text-primary">{preview}</div>
-                  <p className="text-muted-foreground">Estimated score. Click to compute on-chain.</p>
+                  <p className="text-muted-foreground">Estimated score based on data. Click to compute on-chain.</p>
                   <Button onClick={handleCompute} disabled={loading}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8">
                     {loading
@@ -363,59 +325,8 @@ export default function SubmitData() {
           </motion.div>
         )}
 
-        {/* ── V3 Score result ── */}
-        {isV3 && step >= 2 && (
-          <motion.div key="step2-v3"
-            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="glass rounded-xl p-4 border border-success/20 flex items-center gap-2 text-xs text-success">
-              <CheckCircle2 className="w-4 h-4" /> Score computed on EncryptedCreditEngineV3
-            </div>
-
-            <div className="glass rounded-2xl p-8 text-center space-y-6">
-              {profile.score !== null ? (
-                <>
-                  <div className="relative w-32 h-32 mx-auto">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
-                      <circle cx="50" cy="50" r="42" fill="none"
-                        stroke="hsl(var(--primary))" strokeWidth="8" strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 42}`}
-                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - ((profile.score - 300) / 550))}`}
-                        className="transition-all duration-1000" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-3xl font-bold font-heading text-primary">{profile.score}</span>
-                    </div>
-                  </div>
-                  <div className={cn("text-lg font-bold font-heading", profile.riskColor)}>{profile.riskTier}</div>
-                  {profile.scoreHistoryLength > 0 && (
-                    <div className="text-xs text-muted-foreground">
-                      {profile.scoreHistoryLength} encrypted snapshot{profile.scoreHistoryLength > 1 ? "s" : ""} in history
-                    </div>
-                  )}
-                  {/* V3: FHE decryption not available on Base Sepolia */}
-                  <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    🔐 Score stored as FHE ciphertext — decryption requires Fhenix Helium network
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-muted-foreground text-sm">
-                    Score computed and stored as FHE ciphertext on-chain.
-                    Decryption requires Fhenix Helium network.
-                  </p>
-                  <div className="text-xs text-muted-foreground">
-                    🔐 Encrypted — use <code className="bg-muted px-1 rounded">cofhejs.unseal()</code> on Fhenix Helium to read
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
       </AnimatePresence>
     </div>
   );
 }
+

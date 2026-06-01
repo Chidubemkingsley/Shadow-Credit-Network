@@ -4,7 +4,7 @@ import { useWallet } from "@/lib/wallet";
 import { getLoanPoolContract, parseContractError, getLoanStatusLabel, ADDRESSES } from "@/lib/contracts";
 
 // CoFHE-enabled networks — FHE.gte() / FHE.decrypt() only work here
-const COFHE_CHAIN_IDS = new Set([8008135, 412346]); // Fhenix Helium, localcofhe
+const COFHE_CHAIN_IDS = new Set([421614, 8008135, 412346]); // Arbitrum Sepolia, Fhenix Helium, localcofhe
 
 export interface PoolState {
   totalLiquidity: bigint;
@@ -219,14 +219,13 @@ export function useLoanPool() {
     riskPool: number  // 0=Conservative, 1=Moderate, 2=Aggressive
   ) => {
     // V3 requestLoan calls creditEngine.requestApprovalCheck() which calls
-    // FHE.gte() — this requires the CoFHE task manager. On Base Sepolia it
+    // FHE.gte() — this requires the CoFHE task manager. On non-CoFHE chains it
     // reverts immediately. Block it here before the wallet popup fires.
     if (ADDRESSES.isV3Pool && !isFHENetwork) {
       setError(
         "V3 loan approval uses FHE.gte() which requires a CoFHE-enabled network " +
-        "(Fhenix Helium or localcofhe). On Base Sepolia the transaction will revert. " +
-        "To demo borrowing: switch to Fhenix Helium, or fund and borrow on the Wave 1 pool " +
-        "at 0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69 which uses plaintext approval."
+        "(Arbitrum Sepolia, Fhenix Helium, or localcofhe). On non-CoFHE chains the transaction will revert. " +
+        "Switch to Arbitrum Sepolia to use the FHE-gated loan pool."
       );
       return;
     }

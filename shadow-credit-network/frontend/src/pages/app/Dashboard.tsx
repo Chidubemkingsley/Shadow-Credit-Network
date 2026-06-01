@@ -41,7 +41,7 @@ export default function Dashboard() {
           <div>
             <h2 className="text-2xl font-bold font-heading mb-2">Shadow Credit Network</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Connect your wallet to Base Sepolia to access your on-chain credit profile,
+               Connect your wallet to Arbitrum Sepolia to access your on-chain credit profile,
               borrow from risk-tiered pools, and build encrypted reputation.
             </p>
           </div>
@@ -51,7 +51,7 @@ export default function Dashboard() {
                 <AlertTriangle className="w-4 h-4" /> Wrong network detected
               </div>
               <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2" onClick={switchNetwork}>
-                Switch to Base Sepolia
+                Switch to Arbitrum Sepolia
               </Button>
             </div>
           ) : (
@@ -137,7 +137,7 @@ export default function Dashboard() {
             {lastAction === "register" && "Wallet registered successfully! "}
             {lastAction === "compute" && "Credit score computed successfully! "}
             {lastAction === "decrypt" && "Decryption requested — poll in a few blocks. "}
-            <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
+            <a href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
               {txHash.slice(0, 20)}…
             </a>
           </motion.div>
@@ -214,7 +214,7 @@ export default function Dashboard() {
               )}
             </>
           ) : profile.isRegistered && profile.hasCreditScore ? (
-            /* Score computed on V3 but not decryptable on Base Sepolia — show encrypted state */
+            /* Score computed on V3 but not yet decrypted — show encrypted state */
             <div className="space-y-3">
               {/* Encrypted score ring — shows as locked */}
               <div className="relative w-24 h-24 mx-auto">
@@ -248,7 +248,7 @@ export default function Dashboard() {
               )}
 
               <div className="text-xs text-muted-foreground">
-                Decryption requires Fhenix Helium network.
+                Decryption requires a CoFHE-enabled network (Arbitrum Sepolia, Fhenix Helium, or localcofhe).
                 Score is valid for loan approval via ebool comparison.
               </div>
 

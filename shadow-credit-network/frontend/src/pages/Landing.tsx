@@ -239,8 +239,8 @@ export default function Landing() {
               Nine battle-tested modules across four waves — privacy-preserving credit for the entire DeFi stack.
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex items-center justify-center gap-3 mt-6">
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Wave 1–3 Live on Base Sepolia</span>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20">Wave 4 Complete</span>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground">Waves 1–5 Live on Arbitrum Sepolia</span>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20">Wave 5 Complete</span>
             </motion.div>
           </motion.div>
 
@@ -522,7 +522,7 @@ function FeatureVisual({ index }: { index: number }) {
       <div className="flex items-center gap-4">
         <div className="flex-1 bg-muted rounded-xl p-3 text-center">
           <div className="text-xs text-muted-foreground">Origin</div>
-          <div className="font-bold text-sm mt-1">Fhenix Helium</div>
+          <div className="font-bold text-sm mt-1">Arbitrum Sepolia</div>
           <div className="text-xs text-primary mt-1">Score: 782</div>
         </div>
         <motion.div animate={{ x: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>

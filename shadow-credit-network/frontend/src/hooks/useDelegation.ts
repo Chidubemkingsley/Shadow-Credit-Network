@@ -128,7 +128,7 @@ export function useDelegation() {
           // V2 getBond returns 9 values; V1 returns 7
           const status = Number(isV2 ? b[8] : b[6]);
           const dueDate = isV2 ? BigInt(b[7]) : 0n;
-          const isExpired = isV2 && status === 0 && Number(dueDate) > 0 && Number(dueDate) < now;
+          const isExpired = isV2 && status === 1 && Number(dueDate) > 0 && Number(dueDate) < now;
 
           loaded.push({
             id: Number(id),

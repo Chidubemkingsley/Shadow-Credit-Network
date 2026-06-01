@@ -71,6 +71,46 @@ const config: HardhatUserConfig = {
 			timeout: 60000,
 			httpHeaders: {},
 		},
+
+		// Optimism Sepolia testnet
+		'optimism-sepolia': {
+			url: process.env.OPTIMISM_SEPOLIA_RPC_URL || 'https://sepolia.optimism.io',
+			accounts: accounts,
+			chainId: 11155420,
+			gasMultiplier: 1.2,
+			timeout: 60000,
+			httpHeaders: {},
+		},
+
+		// Polygon Amoy testnet
+		'polygon-amoy': {
+			url: process.env.POLYGON_AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology',
+			accounts: accounts,
+			chainId: 80002,
+			gasMultiplier: 1.2,
+			timeout: 60000,
+			httpHeaders: {},
+		},
+
+		// Avalanche Fuji testnet
+		'avalanche-fuji': {
+			url: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc',
+			accounts: accounts,
+			chainId: 43113,
+			gasMultiplier: 1.2,
+			timeout: 60000,
+			httpHeaders: {},
+		},
+
+		// BNB Smart Chain Testnet
+		'bnb-testnet': {
+			url: process.env.BNB_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545',
+			accounts: accounts,
+			chainId: 97,
+			gasMultiplier: 1.2,
+			timeout: 60000,
+			httpHeaders: {},
+		},
 	},
 
 	// Optional: Add Etherscan verification config
@@ -78,6 +118,7 @@ const config: HardhatUserConfig = {
 		apiKey: {
 			'eth-sepolia': process.env.ETHERSCAN_API_KEY || '',
 			'arb-sepolia': process.env.ARBISCAN_API_KEY || '',
+			'arbitrumSepolia': process.env.ARBISCAN_API_KEY || '',
 			'base-sepolia': process.env.BASESCAN_API_KEY || '',
 		},
 	},

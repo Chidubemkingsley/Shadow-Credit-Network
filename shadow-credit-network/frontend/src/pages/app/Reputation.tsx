@@ -27,7 +27,7 @@ export default function Reputation() {
         <div className="glass rounded-2xl p-12 text-center space-y-4">
           <div className="text-4xl">⭐</div>
           <h2 className="text-2xl font-bold font-heading">Connect Your Wallet</h2>
-          <p className="text-muted-foreground">Connect to Base Sepolia to view your reputation profile.</p>
+          <p className="text-muted-foreground">Connect to Arbitrum Sepolia to view your reputation profile.</p>
         </div>
       </div>
     );
@@ -49,7 +49,7 @@ export default function Reputation() {
               Set <code className="bg-muted px-1 rounded text-xs">VITE_REPUTATION_REGISTRY_ADDRESS</code> in{" "}
               <code className="bg-muted px-1 rounded text-xs">frontend/.env.local</code>.
               <br />
-              Deployed address: <code className="bg-muted px-1 rounded text-xs">0xeecAb683D93a483669D797E4B7a06e8c286A25dC</code>
+               Deployed address: <code className="bg-muted px-1 rounded text-xs">0xc214BF404a126b9f653ceB77b559587De579A5C3</code>
             </p>
           </div>
         </div>
@@ -105,11 +105,13 @@ export default function Reputation() {
             className="glass rounded-xl p-3 border border-success/30 flex items-center gap-2 text-xs text-success">
             <CheckCircle2 className="w-4 h-4" />
             {lastAction === "register" && "Registered successfully! "}
-            {lastAction === "decrypt" && "Decryption requested — poll in a few blocks. "}
+            {lastAction === "decrypt" && "Score decrypted via CoFHE SDK! "}
             {lastAction === "decay" && "Decay applied successfully! "}
-            <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
-              {txHash.slice(0, 20)}…
-            </a>
+            {lastAction === "register" || lastAction === "decay" ? (
+              <a href={`https://sepolia.arbiscan.io/tx/${txHash}`} target="_blank" rel="noreferrer" className="underline font-mono text-primary">
+                {txHash.slice(0, 20)}…
+              </a>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>
@@ -243,15 +245,16 @@ export default function Reputation() {
                   >
                     {loading && lastAction === "decrypt"
                       ? <><Loader2 className="w-4 h-4 animate-spin" /> Requesting…</>
-                      : <>Request FHE Decryption <ArrowRight className="w-4 h-4" /></>
+                      : <>Off-Chain Decrypt (SDK) <ArrowRight className="w-4 h-4" /></>
                     }
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Async — poll again after a few blocks.
+                    Your score is decrypted privately in-browser via the CoFHE SDK.
+                    Cross-chain bridging is not available on this network.
                   </p>
                 </>
               ) : (
-                /* Base Sepolia — FHE.decrypt() not available */
+                /* Non-CoFHE network — FHE.decrypt() not available */
                 <>
                   <div className="text-xs font-semibold text-primary">Score Computed ✓</div>
                   <p className="text-sm text-muted-foreground">
@@ -259,12 +262,11 @@ export default function Reputation() {
                   </p>
                   <div className="glass rounded-lg p-3 border border-warning/20 text-xs text-left space-y-1.5">
                     <div className="font-semibold text-warning flex items-center gap-1.5">
-                      <AlertTriangle className="w-3 h-3" /> Base Sepolia limitation
+                      <AlertTriangle className="w-3 h-3" /> Network limitation
                     </div>
                     <p className="text-muted-foreground">
                       <code className="bg-muted px-1 rounded">FHE.decrypt()</code> requires the CoFHE task manager,
-                      which is only deployed on <strong className="text-foreground">Fhenix Helium</strong> or <strong className="text-foreground">localcofhe</strong>.
-                      Your score is valid for all protocol operations — it just can't be revealed as a plaintext number on this network.
+                      which is not deployed on this network. Your score is valid for all protocol operations — it just can't be revealed as a plaintext number on this network.
                     </p>
                   </div>
                 </>

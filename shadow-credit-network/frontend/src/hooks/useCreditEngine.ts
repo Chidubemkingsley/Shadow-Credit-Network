@@ -1,6 +1,10 @@
 import { useState, useCallback } from "react";
 import { ethers } from "ethers";
-import { useWallet } from "@/lib/wallet";
+import { FheTypes, Encryptable } from "@cofhe/sdk";
+import { createCofheConfig, createCofheClient } from "@cofhe/sdk/web";
+import { Ethers6Adapter } from "@cofhe/sdk/adapters";
+import { arbSepolia } from "@cofhe/sdk/chains";
+import { useWallet, isCoFHENetwork } from "@/lib/wallet";
 import { getCreditEngineContract, parseContractError, getRiskTierFromScore, ADDRESSES } from "@/lib/contracts";
 
 export interface CreditProfile {
@@ -25,7 +29,7 @@ export interface CreditProfile {
 //   struct InEuint64 { uint256 ctHash; uint8 securityZone; uint8 utype; bytes signature; }
 //
 // If you have the CoFHE SDK output, pass it directly to submitCreditDataEncrypted().
-// For the live Base Sepolia deployment (SimpleCreditEngine V1), use submitCreditData()
+// For plaintext (non-FHE) V1 deployment, use submitCreditData()
 // which sends plaintext values — the V1 contract stores them as uint256.
 export interface CoFHEEncryptedInput {
   ctHash: bigint;
@@ -59,7 +63,7 @@ const DEFAULT_PROFILE: CreditProfile = {
 };
 
 export function useCreditEngine() {
-  const { signer, provider, address } = useWallet();
+  const { signer, provider, address, chainId } = useWallet();
   const [profile, setProfile] = useState<CreditProfile>(DEFAULT_PROFILE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,11 +171,7 @@ export function useCreditEngine() {
 
   // ── submitCreditData ─────────────────────────────────────────────────────
   // V1 path: sends raw uint256 values to SimpleCreditEngine.
-  // V3 path: EncryptedCreditEngineV3 requires real InEuint* ciphertexts from
-  //          the CoFHE SDK. Without the SDK, we skip data submission and go
-  //          straight to computeCreditScore() — the contract operates on
-  //          zero-initialized encrypted fields, producing a score of 300.
-  //          This is the correct Wave 3 demo flow on Base Sepolia.
+  // V3 path: uses CoFHE SDK to encrypt inputs locally before submission.
   const submitCreditData = useCallback(async (
     income: bigint,
     totalDebt: bigint,
@@ -181,43 +181,55 @@ export function useCreditEngine() {
     numDefaults: number
   ) => {
     const contract = getContract();
-    if (!contract) return;
-
-    if (ADDRESSES.isV3Engine) {
-      // V3: skip data submission (requires CoFHE SDK not available here)
-      // and go straight to computeCreditScore(). The contract will compute
-      // on zero-initialized encrypted fields → score = 300 (minimum).
-      // Real FHE data submission uses submitCreditDataEncrypted() below.
-      setLoading(true); setError(null); setTxHash(null);
-      try {
-        const tx = await contract.computeCreditScore();
-        setTxHash(tx.hash);
-        await tx.wait();
-        await loadProfile();
-      } catch (err: any) {
-        setError(parseContractError(err));
-      } finally { setLoading(false); }
-      return;
-    }
+    if (!contract || !signer || !provider) return;
 
     setLoading(true); setError(null); setTxHash(null);
+
     try {
-      // V1 SimpleCreditEngine — all params are plain uint256
-      const tx = await contract.submitCreditData(
-        income,
-        totalDebt,
-        BigInt(paymentHistory),
-        BigInt(creditUtilization),
-        BigInt(accountAge),
-        BigInt(numDefaults)
-      );
-      setTxHash(tx.hash);
-      await tx.wait();
+      if (ADDRESSES.isV3Engine) {
+        // V3: Local FHE Encryption using CoFHE SDK
+        const config = createCofheConfig({ supportedChains: [arbSepolia], useWorkers: false });
+        const client = createCofheClient(config);
+        const adapter = await Ethers6Adapter(provider, signer);
+        await client.connect(adapter.publicClient, adapter.walletClient);
+
+        const encrypted = await client.encryptInputs([
+          Encryptable.uint64(income),
+          Encryptable.uint64(totalDebt),
+          Encryptable.uint32(BigInt(paymentHistory)),
+          Encryptable.uint32(BigInt(creditUtilization)),
+          Encryptable.uint32(BigInt(accountAge)),
+          Encryptable.uint32(BigInt(numDefaults)),
+        ]).execute();
+
+        const tx = await contract.submitCreditData(
+          encrypted[0], // income
+          encrypted[1], // totalDebt
+          encrypted[2], // paymentHistory
+          encrypted[3], // utilization
+          encrypted[4], // age
+          encrypted[5]  // defaults
+        );
+        setTxHash(tx.hash);
+        await tx.wait();
+      } else {
+        // V1 SimpleCreditEngine — all params are plain uint256
+        const tx = await contract.submitCreditData(
+          income,
+          totalDebt,
+          BigInt(paymentHistory),
+          BigInt(creditUtilization),
+          BigInt(accountAge),
+          BigInt(numDefaults)
+        );
+        setTxHash(tx.hash);
+        await tx.wait();
+      }
       await loadProfile();
     } catch (err: any) {
       setError(parseContractError(err));
     } finally { setLoading(false); }
-  }, [getContract, loadProfile]);
+  }, [getContract, signer, provider, loadProfile]);
 
   // ── submitCreditDataEncrypted — V3 EncryptedCreditEngineV3 (FHE ciphertexts) ─
   // Takes real CoFHE SDK EncryptedItemInput objects.
@@ -287,36 +299,63 @@ export function useCreditEngine() {
   }, [getContract, loadProfile]);
 
   // ── requestDecryption ─────────────────────────────────────────────────────
-  // NOTE: FHE.decrypt() requires a CoFHE-enabled network (Fhenix Helium or
-  // localcofhe). On Base Sepolia, this call will revert because the FHE
-  // task manager is not deployed there. The function is kept for completeness
-  // but the UI should not expose it on Base Sepolia.
-  const requestDecryption = useCallback(async () => {
+  const requestDecryption = useCallback(async (): Promise<number | null> => {
     const contract = getContract();
-    if (!contract) return;
+    if (!contract || !signer || !provider) return null;
     setLoading(true); setError(null); setTxHash(null);
     try {
-      // On V3 + Base Sepolia: FHE.decrypt() reverts — task manager not deployed.
-      // On V3 + Fhenix Helium / localcofhe: works correctly.
-      // On V1 (SimpleCreditEngine): uses getDecryptedScoreSafe() which is a
-      // plain view — no FHE network needed.
-      if (ADDRESSES.isV3Engine) {
-        setError(
-          "FHE decryption requires a CoFHE-enabled network (Fhenix Helium or localcofhe). " +
-          "Base Sepolia does not have the FHE task manager deployed. " +
-          "Your score is stored as an encrypted ciphertext handle on-chain."
-        );
+      if (!ADDRESSES.isV3Engine) {
+        const score = await loadProfile();
         setLoading(false);
-        return;
+        return null;
       }
-      const tx = await contract.requestScoreDecryption();
-      setTxHash(tx.hash);
-      await tx.wait();
-      await loadProfile();
+
+      const historyLength = Number(await contract.getScoreHistoryLength(address));
+      if (historyLength === 0) {
+        setError("No credit score found — submit data and compute first.");
+        return null;
+      }
+      const handle: bigint = await contract.getScoreHistoryAt(address, historyLength - 1);
+
+      if (handle === 0n) {
+        setError("Score handle is zero — recompute your score first.");
+        return null;
+      }
+
+      let score: number | null = null;
+
+      if (isCoFHENetwork(chainId)) {
+        try {
+          const config = createCofheConfig({ supportedChains: [arbSepolia], useWorkers: false });
+          const client = createCofheClient(config);
+          const adapter = await Ethers6Adapter(provider, signer);
+          await client.connect(adapter.publicClient, adapter.walletClient);
+          await client.permits.getOrCreateSelfPermit();
+          const decrypted = await client
+            .decryptForView(handle, FheTypes.Uint32)
+            .withPermit()
+            .execute();
+          score = Number(decrypted.toString());
+        } catch (innerErr: any) {
+          console.error("[CreditEngine] SDK decrypt failed:", innerErr);
+          score = null;
+        }
+      } else {
+        setError("FHE decryption requires a CoFHE-enabled network (Arbitrum Sepolia, Fhenix Helium, or localcofhe).");
+        return null;
+      }
+
+      if (score === null) {
+        setError("Decryption failed. Try again later.");
+        return null;
+      }
+      setProfile((prev) => ({ ...prev, score, isDecrypted: true }));
+      return score;
     } catch (err: any) {
       setError(parseContractError(err));
+      return null;
     } finally { setLoading(false); }
-  }, [getContract, loadProfile]);
+  }, [getContract, signer, provider, address, chainId]);
 
   // ── computeBorrowingPower (V3 only) ───────────────────────────────────────
   const computeBorrowingPower = useCallback(async () => {
@@ -349,6 +388,20 @@ export function useCreditEngine() {
     } finally { setLoading(false); }
   }, [getContract]);
 
+  // ── publishScore (bridge fallback when FHE.decrypt unavailable) ──────────
+  const publishScore = useCallback(async (_score: number) => {
+    const contract = getContract();
+    if (!contract || !_score) return;
+    setLoading(true); setError(null); setTxHash(null);
+    try {
+      const tx = await contract.publishScore(_score);
+      setTxHash(tx.hash);
+      await tx.wait();
+    } catch (err: any) {
+      setError(parseContractError(err));
+    } finally { setLoading(false); }
+  }, [getContract]);
+
   return {
     profile,
     loading,
@@ -356,12 +409,13 @@ export function useCreditEngine() {
     txHash,
     loadProfile,
     register,
-    // V1 plaintext path (live Base Sepolia)
+    // V1 plaintext path
     submitCreditData,
     // V3 FHE path — requires CoFHE SDK encrypted inputs
     submitCreditDataEncrypted,
     computeScore,
     requestDecryption,
+    publishScore,
     computeBorrowingPower,
     grantScoreAccess,
     clearError: () => setError(null),

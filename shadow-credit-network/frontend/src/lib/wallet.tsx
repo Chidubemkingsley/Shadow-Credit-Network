@@ -2,20 +2,46 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { ethers } from "ethers";
 
 // ── Network config ────────────────────────────────────────────────────────────
-const REQUIRED_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID ?? "84532");
+const REQUIRED_CHAIN_ID = parseInt(import.meta.env.VITE_CHAIN_ID ?? "421614");
 
-// CoFHE-enabled networks: Fhenix Helium (8008135) and localcofhe (412346)
-// Base Sepolia (84532) does NOT have the CoFHE task manager deployed.
-const COFHE_CHAIN_IDS = new Set([8008135, 412346]);
+// CoFHE-enabled networks: Fhenix Helium (8008135), localcofhe (412346),
+// and Arbitrum Sepolia (421614) — CoFHE now live on Arbitrum.
+const COFHE_CHAIN_IDS = new Set([8008135, 412346, 421614]);
 export const isCoFHENetwork = (chainId: number | null): boolean =>
   chainId !== null && COFHE_CHAIN_IDS.has(chainId);
 
+function getChainConfig(chainId: number): { chainName: string; rpcUrl: string; blockExplorer: string } {
+  if (chainId === 421614) return {
+    chainName: "Arbitrum Sepolia",
+    rpcUrl: import.meta.env.VITE_RPC_URL ?? "https://sepolia-rollup.arbitrum.io/rpc",
+    blockExplorer: import.meta.env.VITE_BLOCK_EXPLORER ?? "https://sepolia.arbiscan.io",
+  };
+  if (chainId === 8008135) return {
+    chainName: "Fhenix Helium",
+    rpcUrl: import.meta.env.VITE_RPC_URL ?? "https://api.helium.fhenix.zone",
+    blockExplorer: import.meta.env.VITE_BLOCK_EXPLORER ?? "",
+  };
+  if (chainId === 84532) return {
+    chainName: "Base Sepolia",
+    rpcUrl: import.meta.env.VITE_RPC_URL ?? "https://sepolia.base.org",
+    blockExplorer: import.meta.env.VITE_BLOCK_EXPLORER ?? "https://sepolia.basescan.org",
+  };
+  // Default: Arbitrum Sepolia
+  return {
+    chainName: "Arbitrum Sepolia",
+    rpcUrl: import.meta.env.VITE_RPC_URL ?? "https://sepolia-rollup.arbitrum.io/rpc",
+    blockExplorer: import.meta.env.VITE_BLOCK_EXPLORER ?? "https://sepolia.arbiscan.io",
+  };
+}
+
+const chainConfig = getChainConfig(REQUIRED_CHAIN_ID);
+
 const REQUIRED_CHAIN = {
   chainId: `0x${REQUIRED_CHAIN_ID.toString(16)}`,
-  chainName: "Base Sepolia",
+  chainName: chainConfig.chainName,
   nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-  rpcUrls: [import.meta.env.VITE_RPC_URL ?? "https://sepolia.base.org"],
-  blockExplorerUrls: [import.meta.env.VITE_BLOCK_EXPLORER ?? "https://sepolia.basescan.org"],
+  rpcUrls: [chainConfig.rpcUrl],
+  blockExplorerUrls: [chainConfig.blockExplorer],
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -27,7 +53,7 @@ export interface WalletState {
   isConnected: boolean;
   isConnecting: boolean;
   isWrongNetwork: boolean;
-  isFHENetwork: boolean;   // true only on Fhenix Helium / localcofhe
+  isFHENetwork: boolean;   // true on Arbitrum Sepolia / Fhenix Helium / localcofhe
   error: string | null;
 }
 
@@ -91,6 +117,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       const signer = await provider.getSigner();
+      // Arbitrum Sepolia: add 50% buffer to gas to avoid
+      // "max fee per gas less than block base fee" RPC errors
+      // Arbitrum doesn't support eth_maxPriorityFeePerGas (EIP-1559),
+      // so we use legacy gasPrice for Arbitrum Sepolia.
+      const ARBITRUM_SEPOLIA = 421614;
+      const _origSendTx = signer.sendTransaction.bind(signer);
+      signer.sendTransaction = async (tx: ethers.TransactionRequest) => {
+        if (chainId === ARBITRUM_SEPOLIA) {
+          const gasPrice = BigInt(await provider.send("eth_gasPrice", []));
+          tx.gasPrice = (gasPrice * 15n) / 10n;
+        } else {
+          try {
+            const feeData = await provider.getFeeData();
+            if (feeData.maxFeePerGas)
+              tx.maxFeePerGas = (feeData.maxFeePerGas * 15n) / 10n;
+            if (feeData.maxPriorityFeePerGas)
+              tx.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 15n) / 10n;
+          } catch {
+            const gasPrice = BigInt(await provider.send("eth_gasPrice", []));
+            tx.gasPrice = (gasPrice * 15n) / 10n;
+          }
+        }
+        return _origSendTx(tx);
+      };
       const address = await signer.getAddress();
       setState({ address, provider, signer, chainId: REQUIRED_CHAIN_ID, isConnected: true, isConnecting: false, isWrongNetwork: false, isFHENetwork: isCoFHENetwork(REQUIRED_CHAIN_ID), error: null });
     } catch (err: any) {
@@ -99,7 +149,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         isConnecting: false,
         isWrongNetwork: err.code === 4001,
         isFHENetwork: false,
-        error: err.code === 4001 ? `Switch to Base Sepolia to continue.` : (err.message ?? "Connection failed"),
+        error: err.code === 4001 ? `Switch to ${chainConfig.chainName} to continue.` : (err.message ?? "Connection failed"),
       }));
     }
   }, [switchNetwork]);

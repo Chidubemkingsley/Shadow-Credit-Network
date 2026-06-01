@@ -1,33 +1,35 @@
 # Shadow Credit Network
 
-> **Privacy-preserving undercollateralized lending on Base Sepolia.**
+> **Privacy-preserving undercollateralized lending on Arbitrum Sepolia (CoFHE).**
 > Your credit score is computed on encrypted data. No plaintext ever touches the chain.
+> **All 9 contracts deployed — Waves 1 through 5 complete.**
 
 ---
 
 ## Live System — Verify in 3 Minutes
 
-**Network:** Base Sepolia (Chain ID: 84532)
+**Network:** Arbitrum Sepolia (Chain ID: 421614) — CoFHE task manager live
 
-| Contract | Address | Explorer |
-|---|---|---|
-| `EncryptedCreditEngineV3` | `0x5A03628A15674c425606e0D4710D66EBa8da09E6` | [View](https://sepolia.basescan.org/address/0x5A03628A15674c425606e0D4710D66EBa8da09E6) |
-| `PrivateLoanPoolV3` | `0x9227C5cC17A2C92fb44DB633C3327CF5E1246913` | [View](https://sepolia.basescan.org/address/0x9227C5cC17A2C92fb44DB633C3327CF5E1246913) |
-| `CreditDelegationV2` | `0xB60cA6232CD26CC74C5605C35E9EbecF4C882348` | [View](https://sepolia.basescan.org/address/0xB60cA6232CD26CC74C5605C35E9EbecF4C882348) |
-| `ReputationRegistry` | `0xeecAb683D93a483669D797E4B7a06e8c286A25dC` | [View](https://sepolia.basescan.org/address/0xeecAb683D93a483669D797E4B7a06e8c286A25dC) |
-| `CreditDataWithZK` | `0xA464874091e2F16838746f41F2c5781dc01AEb51` | [View](https://sepolia.basescan.org/address/0xA464874091e2F16838746f41F2c5781dc01AEb51) |
-| `SimpleCreditEngine` *(Wave 1)* | `0x749663A4B343846a7C02d14F7d15c72A2643b02B` | [View](https://sepolia.basescan.org/address/0x749663A4B343846a7C02d14F7d15c72A2643b02B) |
-| `PrivateLoanPool` *(Wave 1)* | `0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69` | [View](https://sepolia.basescan.org/address/0x0A2AB73CB8311aFD261Ab92137ff70E9Ca268d69) |
-| `CreditDelegation` *(Wave 1)* | `0xA97c943555E92b7E8472118A3b058e72edcDC694` | [View](https://sepolia.basescan.org/address/0xA97c943555E92b7E8472118A3b058e72edcDC694) |
+| Contract | Wave | Address | Explorer |
+|---|---|---|---|---|---|
+| `ReputationRegistry` | W3 | `0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f` | [View](https://sepolia.arbiscan.io/address/0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f) |
+| `EncryptedCreditEngineV3` | W3 | `0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1` | [View](https://sepolia.arbiscan.io/address/0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1) |
+| `PrivateLoanPoolV3` | W3 | `0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6` | [View](https://sepolia.arbiscan.io/address/0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6) |
+| `CreditDelegationV2` | W3 | `0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0` | [View](https://sepolia.arbiscan.io/address/0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0) |
+| `CreditDataWithZK` | W2 | `0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8` | [View](https://sepolia.arbiscan.io/address/0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8) |
+| `ScoreGatedGovernance` | W4 | `0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c` | [View](https://sepolia.arbiscan.io/address/0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c) |
+| `SoulboundCreditNFT` | W4 | `0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9` | [View](https://sepolia.arbiscan.io/address/0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9) |
+| `MultiAssetLoanPool` | W5 | `0x5566bB07eC68eC5a7eF6558E714B284dC4556c10` | [View](https://sepolia.arbiscan.io/address/0x5566bB07eC68eC5a7eF6558E714B284dC4556c10) |
+| `CrossChainCreditBridge` | W5 | `0xB82e06Ea47ACcA34E41511AcBb7c630035158816` | [View](https://sepolia.arbiscan.io/address/0xB82e06Ea47ACcA34E41511AcBb7c630035158816) |
 
 **Deployer:** `0x90356CF97B3BF1749A604d3F89b3DF3602A459E3`
-**Deployed:** Wave 3 contracts live on Base Sepolia — 2026-05-03
+**Deployed:** 2026-06-01 — All 9 contracts wired and verified. CoFHE TaskManager live on Arbitrum Sepolia (compute only — `createDecryptTask` unavailable, so on-chain `FHE.decrypt()` falls back to `publishScore()` for bridging).
 
 ```bash
 # Verify any contract in 30 seconds
-cast call 0x5A03628A15674c425606e0D4710D66EBa8da09E6 \
+cast call 0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1 \
   "getUserCount()(uint256)" \
-  --rpc-url https://sepolia.base.org
+  --rpc-url https://sepolia-rollup.arbitrum.io/rpc
 ```
 
 ---
@@ -164,15 +166,15 @@ User
  │    → appends ctHash to scoreHistory[]
  │    → calls ReputationRegistry.notifyActivity()
  │
- ├─ requestScoreDecryption()      → FHE.decrypt(encCreditScore)
- │    → async: FHE network decrypts          [Fhenix Helium / localcofhe only]
- │    → poll getDecryptedScore() until isDecrypted == true
- │
- ├─ requestLoan(principal,        → PrivateLoanPoolV3
- │    duration, riskPool)         → calls requestApprovalCheck()
- │                                → FHE.gte(score, threshold) → ebool
- │                                → FHE.decrypt(ebool) async
- │                                [Fhenix Helium / localcofhe only]
+  ├─ requestScoreDecryption()      → FHE.decrypt(encCreditScore)
+  │    → async: FHE network decrypts          [Arbitrum Sepolia / Fhenix Helium / localcofhe]
+  │    → poll getDecryptedScore() until isDecrypted == true
+  │
+  ├─ requestLoan(principal,        → PrivateLoanPoolV3
+  │    duration, riskPool)         → calls requestApprovalCheck()
+  │                                → FHE.gte(score, threshold) → ebool
+  │                                → FHE.decrypt(ebool) async
+  │                                [Arbitrum Sepolia / Fhenix Helium / localcofhe]
  │
  ├─ resolveLoanApproval(loanId)   → polls FHE.getDecryptResultSafe(ebool)
  │    → if approved: _disburseLoan()   → ETH sent to borrower
@@ -187,27 +189,34 @@ User
 
 ## Network Compatibility
 
-Shadow Credit is deployed on Base Sepolia for contract verification. Full FHE operations require a CoFHE-enabled network.
+All contracts are deployed on **Arbitrum Sepolia** where the **CoFHE task manager is live**. Full FHE operations work natively without requiring a different network.
 
-| Operation | Base Sepolia | Fhenix Helium | localcofhe |
+| Operation | Arbitrum Sepolia | Base Sepolia | Fhenix Helium / localcofhe |
 |---|---|---|---|
 | `register()` | ✅ | ✅ | ✅ |
 | `computeCreditScore()` | ✅ | ✅ | ✅ |
-| `submitCreditData()` (FHE) | ⚠️ needs CoFHE SDK | ✅ | ✅ |
-| `requestScoreDecryption()` | ❌ no task manager | ✅ | ✅ |
-| `requestLoan()` V3 | ❌ FHE.gte() reverts | ✅ | ✅ |
-| `requestDecryption()` (reputation) | ❌ no task manager | ✅ | ✅ |
+| `submitCreditData()` (FHE) | ✅ CoFHE SDK | ⚠️ needs CoFHE SDK | ✅ |
+| `requestScoreDecryption()` | ⚠️ | ❌ no task manager | ✅ |
+| `requestLoan()` V3 | ✅ FHE.gte() works | ❌ reverts | ✅ |
+| `requestDecryption()` (reputation) | ⚠️ non-trivial handles | ❌ no task manager | ✅ |
 | Fund pool / withdraw | ✅ | ✅ | ✅ |
 | Create/cancel delegation offers | ✅ | ✅ | ✅ |
 | Repay loans and bonds | ✅ | ✅ | ✅ |
+| Governance proposals & voting | ✅ | ✅ | ✅ |
+| Multi-asset pool deposit/borrow | ✅ | — | — |
 
-**Why:** `FHE.decrypt()` and `FHE.gte()` route through the CoFHE `ITaskManager`. The task manager contract is only deployed on Fhenix Helium (chain ID 8008135) and localcofhe (chain ID 412346). Base Sepolia is used for contract deployment and non-FHE interactions.
+**Why:** `FHE.decrypt()` and `FHE.gte()` route through the CoFHE `ITaskManager`. The task manager contract is deployed on Arbitrum Sepolia (chain ID 421614), Fhenix Helium (8008135), and localcofhe (412346). Base Sepolia does not have the task manager.
 
-**Frontend handling:** The UI detects the connected chain via `isFHENetwork` and:
-- Blocks `requestScoreDecryption()` before the wallet popup fires, showing a clear explanation
-- Blocks `requestDecryption()` on the Reputation page with the same guard
-- Shows a 🔐 locked ring with "Score Computed ✓" instead of a broken score display
-- Warns on the Borrow page that V3 loan approval requires Fhenix Helium
+**Score decryption (reputation):** Reputation score decryption uses the **`@cofhe/sdk`** client-side SDK, NOT on-chain `FHE.decrypt()`. The flow:
+1. Frontend reads the encrypted handle via `contract.getMyScoreHandle()`
+2. Calls `client.decryptForView(handle, FheTypes.Uint32).withPermit().execute()`
+3. The SDK decrypts privately in the browser — no on-chain transaction needed
+
+This works because the contract calls `FHE.allowSender(score)` during `_recomputeCompositeScore()`, granting the user's wallet a permit to decrypt their own score via the SDK. The `withPermit()` method proves wallet ownership.
+
+**Why not `FHE.decrypt()` in Solidity?** The deployed TaskManager's `createDecryptTask` reverts for non-trivial handles (those produced by on-chain FHE operations). The CoFHE SDK's `decryptForView` uses the user's wallet keys directly, bypassing the TaskManager entirely. Loan approval via `FHE.gte()` → ebool decrypt is NOT affected — this uses a different flow.
+
+**Frontend handling:** The UI uses `@cofhe/sdk` when the connected chain is a CoFHE network (Arbitrum Sepolia, Fhenix Helium, localcofhe).
 
 ---
 
@@ -248,12 +257,28 @@ All technical depth lives in `/docs`:
 ## Roadmap
 
 | Wave | Status | What Was Built |
-|---|---|---|
-| **Wave 1** | ✅ Complete | `SimpleCreditEngine` (plaintext scoring), `PrivateLoanPool` (plaintext approval), `CreditDelegation` (yield accumulates, not paid). Live on Base Sepolia. Proved the protocol concept end-to-end. |
+|---|---|---|---|
+| **Wave 1** | ✅ Complete | `SimpleCreditEngine` (plaintext scoring), `PrivateLoanPool` (plaintext approval), `CreditDelegation` (yield accumulates, not paid). Proved the protocol concept end-to-end. |
 | **Wave 2** | ✅ Complete | `EncryptedCreditEngineV2` (FHE scoring with real `InEuint*` ciphertexts), `PrivateLoanPoolV2` (ebool-gated disbursement — ETH never moves without FHE result), `CreditDataWithZK` (ZK range proofs + FHE hybrid). |
-| **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating — FHE-only actions blocked gracefully on Base Sepolia. All deployed 2026-05-03. |
-| **Wave 4** | 🔜 Planned | ERC-721 soulbound credit identity NFT. Score-gated governance. Multi-asset pools (ERC-20 collateral). Cross-chain score portability via LayerZero. |
-| **Wave 5** | 🔜 Planned | Mainnet deployment. Institutional attestation network. Undercollateralized stablecoin backed by credit scores. DAO governance of pool parameters. |
+| **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating. |
+| **Wave 4** | ✅ Complete | `ScoreGatedGovernance` — credit score-gated proposals and voting, voting power scales with credit tier. `SoulboundCreditNFT` — ERC-721 credit identity NFT, non-transferable, minted after credit scoring. Both wired to V3 engine and reputation. |
+| **Wave 5** | ✅ Complete | `MultiAssetLoanPool` — ERC-20 collateral support with price feeder, FHE-gated borrowing across asset types. `CrossChainCreditBridge` — LayerZero-based cross-chain score portability. `deploy-wave5` task deploys all 9 contracts with full wiring. |
+
+---
+
+## Debugging Common Issues
+
+### `requestDecryption()` reverts with `require(false)` on CoFHE
+
+This occurs when a ciphertext handle created by FHE operations (non-trivial) is passed to `FHE.decrypt()` without `allowForDecryption` being set on the TaskManager.
+
+**Checklist:**
+
+1. **Was `allowForDecryption` called?** Trivially encrypted handles (`FHE.asEuint32(5000)`) bypass the check. Any handle produced by `FHE.select()`, `FHE.add()`, `FHE.gt()`, `FHE.div()`, `FHE.mul()`, etc. is non-trivial and needs `allowForDecryption`.
+2. **Is the TaskManager address correct?** The hardcoded address in `@fhenixprotocol/cofhe-contracts/FHE.sol` is `0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9`. If the CoFHE deployment changes, this address must be updated.
+3. **Existing users:** If a handle was created before `allowForDecryption` was added to the contract, the existing handle still lacks decryption permission. Trigger a recompute (e.g., `notifyActivity()` from an authorized integration contract) to create a new handle with permission.
+
+**Frontend fix:** Not applicable — this is a contract-level ACL bug.
 
 ---
 
@@ -273,7 +298,7 @@ All technical depth lives in `/docs`:
 
 5. **Reputation that updates itself.** Every protocol action — computing a score, repaying a loan, repaying a bond — automatically calls `ReputationRegistry.notifyActivity()`. The composite reputation score is recomputed in FHE after every event. No user action required.
 
-6. **Network-aware UI.** The frontend tracks `isFHENetwork` (true only on Fhenix Helium chain ID 8008135 and localcofhe 412346). Any action that calls `FHE.decrypt()` is intercepted before the wallet popup fires on non-CoFHE networks, with a clear explanation rather than a cryptic revert.
+6. **Network-aware UI.** The frontend tracks `isFHENetwork` (true on Arbitrum Sepolia 421614, Fhenix Helium 8008135, and localcofhe 412346). Any action that calls `FHE.decrypt()` is intercepted before the wallet popup fires on non-CoFHE networks, with a clear explanation rather than a cryptic revert.
 
 ---
 
@@ -288,23 +313,23 @@ npm install
 # 2. Set deployer key
 echo "PRIVATE_KEY=your_key_here" > .env
 
-# 3. Deploy Wave 3 (writes frontend/.env.local automatically)
-npx hardhat deploy-wave3 --network base-sepolia
+# 3. Deploy all 9 contracts (writes frontend/.env.local automatically)
+npx hardhat deploy-wave5 --network arb-sepolia
 
 # 4. Run frontend
 cd frontend && npm install && npm run dev
 ```
 
-**To use full FHE features** (score decryption, loan approval), run against localcofhe:
+**To run locally** (with or without CoFHE):
 
 ```bash
-# Start local CoFHE node
-npx hardhat node --network localcofhe
+# Deploy to local hardhat network (plaintext only)
+npx hardhat deploy-wave5 --network hardhat
 
-# Deploy to localcofhe
-npx hardhat deploy-wave3 --network localcofhe
+# Or deploy to localcofhe for FHE features
+npx hardhat deploy-wave5 --network localcofhe
 
-# Frontend auto-detects chain ID 412346 and enables FHE actions
+# Frontend auto-detects chain and enables FHE actions on CoFHE networks
 cd frontend && npm run dev
 ```
 
@@ -320,28 +345,45 @@ shadow-credit-network/
 │   ├── CreditDelegationV2.sol         # Yield-paying delegation (Wave 3)
 │   ├── ReputationRegistry.sol         # 6-factor FHE reputation
 │   ├── CreditDataWithZK.sol           # ZK + FHE hybrid bridge
-│   ├── SimpleCreditEngine.sol         # Plaintext engine (Wave 1, live)
-│   ├── PrivateLoanPool.sol            # Plaintext pool (Wave 1, live)
-│   └── CreditDelegation.sol           # Wave 1 delegation (live)
+│   ├── SimpleCreditEngine.sol         # Plaintext engine (Wave 1)
+│   ├── PrivateLoanPool.sol            # Plaintext pool (Wave 1)
+│   └── CreditDelegation.sol           # Wave 1 delegation
+│   ├── ScoreGatedGovernance.sol       # Score-gated DAO (Wave 4)
+│   ├── SoulboundCreditNFT.sol         # Credit identity NFT (Wave 4)
+│   ├── MultiAssetLoanPool.sol         # ERC-20 multi-asset pool (Wave 5)
+│   └── CrossChainCreditBridge.sol     # LZ cross-chain bridge (Wave 5)
 ├── frontend/
 │   ├── src/
 │   │   ├── lib/
-│   │   │   ├── wallet.tsx             # MetaMask + Base Sepolia + isFHENetwork flag
+│   │   ├── components/
+│   │   │   └── AppLayout.tsx          # Nav bar with Wave 5 badges, contract version labels
+│   │   ├── lib/
+│   │   │   ├── wallet.tsx             # MetaMask + CoFHE network detection (Arb Sepolia + Fhenix + localcofhe)
 │   │   │   ├── contracts.ts           # Address resolution, score formula
-│   │   │   └── abis.ts                # All contract ABIs
+│   │   │   └── abis.ts                # All contract ABIs (incl. Wave 5 MultiAsset + Bridge)
 │   │   ├── hooks/
 │   │   │   ├── useCreditEngine.ts     # Register, submit, compute, decrypt (network-gated)
 │   │   │   ├── useLoanPool.ts         # Fund, borrow, repay, yield
 │   │   │   ├── useDelegation.ts       # Offers, bonds, expiry
-│   │   │   └── useReputation.ts       # FHE reputation score (network-gated)
+│   │   │   ├── useReputation.ts       # FHE reputation score (network-gated)
+│   │   │   ├── useMultiAssetPool.ts   # ERC-20 lending, deposits, collateral (Wave 5)
+│   │   │   └── useCrossChainBridge.ts # LZ score bridge send/lookup (Wave 5)
 │   │   └── pages/app/
-│   │       ├── Dashboard.tsx          # Score, risk tier, V3 features
+│   │       ├── Dashboard.tsx          # Score, risk tier, V3–5 features
 │   │       ├── SubmitData.tsx         # 3-step credit data flow
 │   │       ├── Borrow.tsx             # Lend/borrow/refinance
 │   │       ├── Delegation.tsx         # Market + bond management
-│   │       └── Reputation.tsx         # FHE composite score (encrypted state on Base Sepolia)
+│   │       ├── Reputation.tsx         # FHE composite score
+│   │       ├── Governance.tsx         # Proposals and voting (Wave 4)
+│   │       ├── MultiAssetPool.tsx     # Multi-asset pool with asset selector (Wave 5)
+│   │       └── CreditBridge.tsx       # Cross-chain score bridge (Wave 5)
 ├── tasks/
-│   └── deploy-wave3.ts               # Deploys all 5 contracts + writes .env.local
+│   ├── deploy-wave3.ts               # Deploys Wave 3 contracts
+│   └── deploy-wave5.ts               # Deploys all 9 contracts + writes .env.local
+├── test/
+│   ├── CreditDelegation.test.ts      # V2 delegation tests
+│   ├── PrivateLoanPool.test.ts       # V1 pool tests
+│   ├── ...
 ├── zk/
 │   └── circuits/
 │       └── credit_data_validator.circom  # Range proof circuit
@@ -359,4 +401,4 @@ shadow-credit-network/
 
 ## License
 
-MIT — built on Base Sepolia with Fhenix CoFHE.
+MIT — built on Arbitrum Sepolia (CoFHE) with Fhenix CoFHE.

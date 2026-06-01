@@ -1,18 +1,21 @@
 import { useState, useCallback } from "react";
 import { useWallet } from "@/lib/wallet";
 import { getReputationContract, parseContractError, ADDRESSES } from "@/lib/contracts";
+import { FheTypes } from "@cofhe/sdk";
+import { createCofheConfig, createCofheClient } from "@cofhe/sdk/web";
+import { Ethers6Adapter } from "@cofhe/sdk/adapters";
+import { arbSepolia } from "@cofhe/sdk/chains";
 
-// Chain IDs where CoFHE FHE.decrypt() is available
-const COFHE_CHAIN_IDS = new Set([8008135, 412346]); // Fhenix Helium, localcofhe
+const COFHE_CHAIN_IDS = new Set([421614, 8008135, 412346]);
 
 export interface ReputationProfile {
   isRegistered: boolean;
-  compositeScore: number | null;   // 0-10000 bps
+  compositeScore: number | null;
   isDecrypted: boolean;
   registeredAt: number;
   lastActivityAt: number;
   activeAttestations: number;
-  decayInterval: number;           // seconds
+  decayInterval: number;
   minAttestations: number;
 }
 
@@ -54,10 +57,8 @@ export function useReputation() {
   }, [provider]);
 
   const hasRegistry = !!ADDRESSES.reputation;
-  // FHE.decrypt() only works on CoFHE-enabled networks
   const isFHENetwork = chainId !== null && COFHE_CHAIN_IDS.has(chainId);
 
-  // ── Load reputation profile ───────────────────────────────────────────────
   const loadReputation = useCallback(async () => {
     if (!address || !hasRegistry) return;
     const contract = getReadContract();
@@ -78,21 +79,10 @@ export function useReputation() {
           contract.minAttestations(),
         ]);
 
-      // Poll decrypted score
-      let compositeScore: number | null = null;
-      let isDecrypted = false;
-      try {
-        const [score, decrypted] = await contract.getDecryptedScoreSafe();
-        if (decrypted) {
-          compositeScore = Number(score);
-          isDecrypted = true;
-        }
-      } catch {}
-
       setRepProfile({
         isRegistered: true,
-        compositeScore,
-        isDecrypted,
+        compositeScore: null,
+        isDecrypted: false,
         registeredAt: Number(registeredAt),
         lastActivityAt: Number(lastActivityAt),
         activeAttestations: Number(activeAttestations),
@@ -104,7 +94,6 @@ export function useReputation() {
     }
   }, [address, hasRegistry, getReadContract]);
 
-  // ── Transactions ──────────────────────────────────────────────────────────
   const register = useCallback(async () => {
     const contract = getContract();
     if (!contract) return;
@@ -120,31 +109,53 @@ export function useReputation() {
   }, [getContract, loadReputation]);
 
   const requestDecryption = useCallback(async () => {
-    // FHE.decrypt() requires CoFHE task manager — not deployed on Base Sepolia.
-    // Intercept here so the wallet popup never fires with a guaranteed revert.
     if (!isFHENetwork) {
       setError(
-        "FHE decryption requires a CoFHE-enabled network (Fhenix Helium or localcofhe). " +
-        "Base Sepolia does not have the FHE task manager deployed. " +
-        "Your reputation score is stored as an encrypted ciphertext on-chain — " +
-        "it is valid for protocol operations but cannot be revealed on this network."
+        "FHE decryption requires a CoFHE-enabled network (Arbitrum Sepolia, Fhenix Helium, or localcofhe)."
       );
       return;
     }
     const contract = getContract();
-    if (!contract) return;
+    if (!contract || !signer || !address) return;
     setLoading(true); setError(null); setTxHash(null);
     try {
-      const tx = await contract.requestDecryption();
-      setTxHash(tx.hash);
-      await tx.wait();
-      await loadReputation();
-    } catch (err: any) {
-      setError(parseContractError(err));
-    } finally { setLoading(false); }
-  }, [getContract, loadReputation, isFHENetwork]);
+      const handle: bigint = await contract.getMyScoreHandle();
 
-  // applyDecay is permissionless — callable by anyone for any user
+      if (handle === 0n) {
+        setError("Score handle is zero — ensure you are registered and a score has been computed.");
+        return;
+      }
+
+      const config = createCofheConfig({ supportedChains: [arbSepolia], useWorkers: false });
+      const client = createCofheClient(config);
+      const adapter = await Ethers6Adapter(provider, signer);
+      await client.connect(adapter.publicClient, adapter.walletClient);
+      await client.permits.getOrCreateSelfPermit();
+      const decrypted = await client
+        .decryptForView(handle, FheTypes.Uint32)
+        .withPermit()
+        .execute();
+
+      const score = Number(decrypted.toString());
+      setRepProfile((prev) => ({
+        ...prev,
+        compositeScore: score,
+        isDecrypted: true,
+      }));
+    } catch (err: any) {
+      const msg = parseContractError(err);
+      console.error("[Reputation] requestDecryption error:", err, msg);
+      if (msg.includes("require(false)") || msg.includes("execution reverted")) {
+        setError(
+          "Decryption reverted. This can happen if the CoFHE threshold network cannot resolve " +
+          "the ciphertext handle. Your score is still valid for protocol operations."
+        );
+      } else {
+        setError(msg);
+      }
+    } finally { setLoading(false); }
+  }, [getContract, signer, provider, address, isFHENetwork]);
+
   const applyDecay = useCallback(async (targetAddress?: string) => {
     const contract = getContract();
     if (!contract) return;
@@ -161,7 +172,6 @@ export function useReputation() {
     } finally { setLoading(false); }
   }, [getContract, address, loadReputation]);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   const canApplyDecay = useCallback((): boolean => {
     if (!repProfile.isRegistered) return false;
     const now = Math.floor(Date.now() / 1000);

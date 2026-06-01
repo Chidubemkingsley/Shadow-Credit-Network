@@ -12,6 +12,8 @@ import Borrow from "./pages/app/Borrow";
 import Delegation from "./pages/app/Delegation";
 import Reputation from "./pages/app/Reputation";
 import Governance from "./pages/app/Governance";
+import MultiAssetPool from "./pages/app/MultiAssetPool";
+import CreditBridge from "./pages/app/CreditBridge";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +34,8 @@ const App = () => (
               <Route path="delegation" element={<Delegation />} />
               <Route path="reputation" element={<Reputation />} />
               <Route path="governance" element={<Governance />} />
+              <Route path="multi-asset" element={<MultiAssetPool />} />
+              <Route path="bridge" element={<CreditBridge />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -469,6 +469,13 @@ contract ReputationRegistry is Ownable {
         FHE.decrypt(profiles[msg.sender].compositeScore);
     }
 
+    /// @notice Expose the raw ciphertext handle for the caller's composite score
+    /// @dev Allows the frontend to call taskManager.allowForDecryption(handle)
+    ///      directly before requesting decryption
+    function getMyScoreHandle() external view returns (uint256) {
+        return euint32.unwrap(profiles[msg.sender].compositeScore);
+    }
+
     /// @notice Get the decrypted composite score
     function getDecryptedScore() external view returns (uint32 score) {
         (uint256 value, bool decrypted) = FHE.getDecryptResultSafe(profiles[msg.sender].compositeScore);

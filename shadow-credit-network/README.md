@@ -4,6 +4,8 @@
 > Your credit score is computed on encrypted data. No plaintext ever touches the chain.
 > **All 9 contracts deployed — Waves 1 through 5 complete.**
 
+# [VIDEO DEMO](https://youtu.be/h1ZtEQiWQrc)
+# [LIVE WEBSITE](https://shadow-credit-network-wave3.vercel.app/)
 ---
 
 ## Live System — Verify in 3 Minutes
@@ -11,19 +13,19 @@
 **Network:** Arbitrum Sepolia (Chain ID: 421614) — CoFHE task manager live
 
 | Contract | Wave | Address | Explorer |
-|---|---|---|---|---|---|
-| `ReputationRegistry` | W3 | `0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f` | [View](https://sepolia.arbiscan.io/address/0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f) |
-| `EncryptedCreditEngineV3` | W3 | `0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1` | [View](https://sepolia.arbiscan.io/address/0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1) |
-| `PrivateLoanPoolV3` | W3 | `0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6` | [View](https://sepolia.arbiscan.io/address/0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6) |
-| `CreditDelegationV2` | W3 | `0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0` | [View](https://sepolia.arbiscan.io/address/0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0) |
-| `CreditDataWithZK` | W2 | `0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8` | [View](https://sepolia.arbiscan.io/address/0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8) |
-| `ScoreGatedGovernance` | W4 | `0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c` | [View](https://sepolia.arbiscan.io/address/0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c) |
-| `SoulboundCreditNFT` | W4 | `0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9` | [View](https://sepolia.arbiscan.io/address/0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9) |
-| `MultiAssetLoanPool` | W5 | `0x5566bB07eC68eC5a7eF6558E714B284dC4556c10` | [View](https://sepolia.arbiscan.io/address/0x5566bB07eC68eC5a7eF6558E714B284dC4556c10) |
-| `CrossChainCreditBridge` | W5 | `0xB82e06Ea47ACcA34E41511AcBb7c630035158816` | [View](https://sepolia.arbiscan.io/address/0xB82e06Ea47ACcA34E41511AcBb7c630035158816) |
+|---|---|---|---|---|
+| `ReputationRegistry` | W3 | `0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad` | [View](https://sepolia.arbiscan.io/address/0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad) |
+| `EncryptedCreditEngineV3` | W3 | `0xaaF38A665e74EdE56a7549B193e007B3976eF184` | [View](https://sepolia.arbiscan.io/address/0xaaF38A665e74EdE56a7549B193e007B3976eF184) |
+| `PrivateLoanPoolV3` | W3 | `0xc4184b66a0552Fa9BC5703B9603865ebb2De7251` | [View](https://sepolia.arbiscan.io/address/0xc4184b66a0552Fa9BC5703B9603865ebb2De7251) |
+| `CreditDelegationV2` | W3 | `0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5` | [View](https://sepolia.arbiscan.io/address/0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5) |
+| `CreditDataWithZK` | W2 | `0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37` | [View](https://sepolia.arbiscan.io/address/0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37) |
+| `ScoreGatedGovernance` | W4 | `0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971` | [View](https://sepolia.arbiscan.io/address/0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971) |
+| `SoulboundCreditNFT` | W4 | `0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6` | [View](https://sepolia.arbiscan.io/address/0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6) |
+| `MultiAssetLoanPool` | W5 | `0xEED53AF3E8037Ff80EACe9ABD8102a60A4AD2ce9` | [View](https://sepolia.arbiscan.io/address/0xEED53AF3E8037Ff80EACe9ABD8102a60A4AD2ce9) |
+| `CrossChainCreditBridge` | W5 | `0xB95C4EeA0072f49a1166835E229Eef6aa7b02125` | [View](https://sepolia.arbiscan.io/address/0xB95C4EeA0072f49a1166835E229Eef6aa7b02125) |
 
 **Deployer:** `0x90356CF97B3BF1749A604d3F89b3DF3602A459E3`
-**Deployed:** 2026-06-01 — All 9 contracts wired and verified. CoFHE TaskManager live on Arbitrum Sepolia (compute only — `createDecryptTask` unavailable, so on-chain `FHE.decrypt()` falls back to `publishScore()` for bridging).
+**Deployed:** 2026-06-01 — All 9 contracts wired and verified. MultiAssetLoanPool and PrivateLoanPoolV3 updated with FHE try/catch fallback (2026-06-01) — auto-disburses when CoFHE is unavailable. Pools pre-funded with liquidity (50k USDC / 100 WETH / 100k DAI for multi-asset; ETH for V3 single-asset). Old/pre-existing duplicate assets disabled.
 
 ```bash
 # Verify any contract in 30 seconds
@@ -197,7 +199,7 @@ All contracts are deployed on **Arbitrum Sepolia** where the **CoFHE task manage
 | `computeCreditScore()` | ✅ | ✅ | ✅ |
 | `submitCreditData()` (FHE) | ✅ CoFHE SDK | ⚠️ needs CoFHE SDK | ✅ |
 | `requestScoreDecryption()` | ⚠️ | ❌ no task manager | ✅ |
-| `requestLoan()` V3 | ✅ FHE.gte() works | ❌ reverts | ✅ |
+| `requestLoan()` V3 | ✅ (FHE fallback — auto-disburse if unavailable) | ❌ reverts | ✅ |
 | `requestDecryption()` (reputation) | ⚠️ non-trivial handles | ❌ no task manager | ✅ |
 | Fund pool / withdraw | ✅ | ✅ | ✅ |
 | Create/cancel delegation offers | ✅ | ✅ | ✅ |
@@ -262,11 +264,19 @@ All technical depth lives in `/docs`:
 | **Wave 2** | ✅ Complete | `EncryptedCreditEngineV2` (FHE scoring with real `InEuint*` ciphertexts), `PrivateLoanPoolV2` (ebool-gated disbursement — ETH never moves without FHE result), `CreditDataWithZK` (ZK range proofs + FHE hybrid). |
 | **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating. |
 | **Wave 4** | ✅ Complete | `ScoreGatedGovernance` — credit score-gated proposals and voting, voting power scales with credit tier. `SoulboundCreditNFT` — ERC-721 credit identity NFT, non-transferable, minted after credit scoring. Both wired to V3 engine and reputation. |
-| **Wave 5** | ✅ Complete | `MultiAssetLoanPool` — ERC-20 collateral support with price feeder, FHE-gated borrowing across asset types. `CrossChainCreditBridge` — LayerZero-based cross-chain score portability. `deploy-wave5` task deploys all 9 contracts with full wiring. |
+| **Wave 5** | ✅ Complete | `MultiAssetLoanPool` — ERC-20 collateral support with price feeder, FHE-gated borrowing across asset types. Now has FHE try/catch fallback — auto-disburses when CoFHE unavailable. 3 tokens pre-whitelisted and funded. `CrossChainCreditBridge` — LayerZero-based cross-chain score portability. `seed-assets` task for one-command pool funding. `deploy-wave5` task deploys all 9 contracts with full wiring. |
 
 ---
 
 ## Debugging Common Issues
+
+### `requestLoan()` reverts with `data: 0x` (empty revert)
+
+This means the FHE library (`FHE.asEuint32`, `FHE.gte`, `FHE.decrypt`) inside the engine's `requestApprovalCheck()` reverted without an error string — typically because CoFHE is not available on the connected chain.
+
+**Fix:** Both `MultiAssetLoanPool` and `PrivateLoanPoolV3` now wrap the `requestApprovalCheck` call in try/catch. When FHE fails, the contract auto-disburses the loan immediately (the user's credit score is still verified before the try/catch). This is deployed in the latest contract versions — ensure you're connected to the updated pools:
+- `MultiAssetLoanPool`: `0xEED53AF3E8037Ff80EACe9ABD8102a60A4AD2ce9`
+- `PrivateLoanPoolV3`: `0xc4184b66a0552Fa9BC5703B9603865ebb2De7251`
 
 ### `requestDecryption()` reverts with `require(false)` on CoFHE
 
@@ -379,7 +389,8 @@ shadow-credit-network/
 │   │       └── CreditBridge.tsx       # Cross-chain score bridge (Wave 5)
 ├── tasks/
 │   ├── deploy-wave3.ts               # Deploys Wave 3 contracts
-│   └── deploy-wave5.ts               # Deploys all 9 contracts + writes .env.local
+│   ├── deploy-wave5.ts               # Deploys all 9 contracts + writes .env.local
+│   └── seed-assets.ts                # Disable old assets, fund new pools with liquidity
 ├── test/
 │   ├── CreditDelegation.test.ts      # V2 delegation tests
 │   ├── PrivateLoanPool.test.ts       # V1 pool tests

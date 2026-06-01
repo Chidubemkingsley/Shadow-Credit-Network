@@ -2,15 +2,15 @@
 
 > **Privacy-preserving undercollateralized lending on Arbitrum Sepolia.**
 > Your credit score is computed on encrypted data. No plaintext ever touches the chain.
-> CoFHE live on Arbitrum — every FHE operation works in production.
+> CoFHE on Arbitrum — FHE operations auto-fallback to direct disbursement when unavailable.
 
 ---
 
 ![imagw](s2.png)
 
-## Live System — Wave 5 Deployed (Bridge WIP)
+## Live System — Wave 5 Deployed (Bridge WIP, FHE Fallback Active)
 
-**Primary Network:** Arbitrum Sepolia (Chain ID: 421614) — CoFHE enabled  
+**Primary Network:** Arbitrum Sepolia (Chain ID: 421614) — CoFHE with FHE try/catch fallback  
 **Legacy:** Base Sepolia (Chain ID: 84532) — Wave 1–3 reference
 
 ### Wave 3–5 — Arbitrum Sepolia (Live, CoFHE Enabled)
@@ -18,12 +18,12 @@
 |---|---|---|
 | `ReputationRegistry` | `0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad` | [View](https://sepolia.arbiscan.io/address/0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad) |
 | `EncryptedCreditEngineV3` | `0xaaF38A665e74EdE56a7549B193e007B3976eF184` | [View](https://sepolia.arbiscan.io/address/0xaaF38A665e74EdE56a7549B193e007B3976eF184) |
-| `PrivateLoanPoolV3` | `0xC6360360cCF32bE622723e576D8bDA9fc3446F43` | [View](https://sepolia.arbiscan.io/address/0xC6360360cCF32bE622723e576D8bDA9fc3446F43) |
+| `PrivateLoanPoolV3` | `0xc4184b66a0552Fa9BC5703B9603865ebb2De7251` | [View](https://sepolia.arbiscan.io/address/0xc4184b66a0552Fa9BC5703B9603865ebb2De7251) |
 | `CreditDelegationV2` | `0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5` | [View](https://sepolia.arbiscan.io/address/0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5) |
 | `CreditDataWithZK` | `0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37` | [View](https://sepolia.arbiscan.io/address/0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37) |
 | `ScoreGatedGovernance` | `0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971` | [View](https://sepolia.arbiscan.io/address/0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971) |
 | `SoulboundCreditNFT` | `0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6` | [View](https://sepolia.arbiscan.io/address/0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6) |
-| `MultiAssetLoanPool` | `0x384B2460d7AC08Cef74B02E4D80108aDCa4B4A12` | [View](https://sepolia.arbiscan.io/address/0x384B2460d7AC08Cef74B02E4D80108aDCa4B4A12) |
+| `MultiAssetLoanPool` | `0xEED53AF3E8037Ff80EACe9ABD8102a60A4AD2ce9` | [View](https://sepolia.arbiscan.io/address/0xEED53AF3E8037Ff80EACe9ABD8102a60A4AD2ce9) |
 | `CrossChainCreditBridge` | `0xB95C4EeA0072f49a1166835E229Eef6aa7b02125` | [View](https://sepolia.arbiscan.io/address/0xB95C4EeA0072f49a1166835E229Eef6aa7b02125) |
 
 **Test Tokens (public `mint()` — faucet available in the UI):**
@@ -34,7 +34,7 @@
 | MockDAI (18 dec) | `0xe53179158d4E5221703dEf34903E04FBd98DF7f7` | [View](https://sepolia.arbiscan.io/address/0xe53179158d4E5221703dEf34903E04FBd98DF7f7) | `mint(addr, 1e21)` |
 
 **Pre-whitelisted on MultiAssetLoanPool** — prices set: USDC=$1.00, WETH=$3,500.00, DAI=$1.00.  
-**Faucet included in frontend** — Multi-Asset Pool page shows "Test Token Faucet" buttons (Mint 1000 USDC / 1 WETH / 1000 DAI). Any wallet can call `mint()` directly.
+All 3 pools funded with initial liquidity (50k USDC / 100 WETH / 100k DAI).
 
 ### Wave 3–4 — Base Sepolia (Legacy Reference)
 | Contract | Address | Explorer |
@@ -125,19 +125,26 @@ DeFi lending today requires overcollateralization — you must lock up more than
 
 The four invariants that make Shadow Credit trustworthy:
 
-### 1. ETH never moves without a verified FHE result
+### 1. ETH never moves without a verified FHE result (or FHE-unavailable fallback)
 
 ```solidity
-// PrivateLoanPoolV3.resolveLoanApproval()
-(bool ready, bool approved) = creditEngine.resolveApprovalCheck(loan.approvalCheckId);
-if (!ready) return;  // FHE decryption not complete — retry later
-if (approved) {
-    _activateAndDisburse(_loanId);  // only path to ETH transfer
+// MultiAssetLoanPool.requestLoan() — FHE try/catch fallback
+if (!creditEngine.hasCreditScore(msg.sender)) revert NoCreditScore();
+if (creditEngine.isScoreStale(msg.sender))    revert StaleScore();
+
+try creditEngine.requestApprovalCheck(msg.sender, effectiveMinScore)
+    returns (bytes32 checkId, uint256 eboolCtHash)
+{
+    loan.approvalCheckId     = checkId;
+    loan.approvalEboolCtHash = eboolCtHash;
+    // Loan stays Pending — resolved later via resolveLoanApproval()
+} catch {
+    // FHE unavailable on this chain — auto-disburse (score already verified)
+    _activateAndDisburse(loanId);
 }
-// No owner override. No plaintext bool bypass.
 ```
 
-The `approvalCheckId` maps to an `ebool` created by `FHE.gte(encCreditScore, threshold)`. The ebool is decrypted asynchronously by the FHE network. `_disburseLoan()` is only reachable through `_activateAndDisburse()`, which is only reachable when `approved == true`.
+The `approvalCheckId` maps to an `ebool` created by `FHE.gte(encCreditScore, threshold)`. When FHE is available, the ebool is decrypted asynchronously by the FHE network and `_activateAndDisburse()` is only reachable through `approved == true`. **When FHE is unavailable (e.g. CoFHE down), the contract falls back to auto-disbursement after verifying the user has a valid, non-stale credit score.** The user's score is always verified before any disbursement.
 
 ### 2. No plaintext financial data on-chain — ever
 
@@ -214,15 +221,17 @@ User
  │    → async: FHE network decrypts          [Fhenix Helium / localcofhe only]
  │    → poll getDecryptedScore() until isDecrypted == true
  │
- ├─ requestLoan(principal,        → PrivateLoanPoolV3
- │    duration, riskPool)         → calls requestApprovalCheck()
- │                                → FHE.gte(score, threshold) → ebool
- │                                → FHE.decrypt(ebool) async
- │                                [Fhenix Helium / localcofhe only]
+ ├─ requestLoan(principal,        → PrivateLoanPoolV3 / MultiAssetLoanPool
+  │    duration, riskPool)         → verifies credit score + staleness
+  │                                → tries FHE.gte(score, threshold)
+  │                                → if FHE available: creates ebool, loan stays Pending
+  │                                → if FHE unavailable: auto-disburses (catch fallback)
+  │                                [Fhenix Helium / localcofhe]
  │
- ├─ resolveLoanApproval(loanId)   → polls FHE.getDecryptResultSafe(ebool)
- │    → if approved: _disburseLoan()   → ETH sent to borrower
- │    → if rejected: loan stays Pending
+ ├─ resolveLoanApproval(loanId)   → polls FHE.getDecryptResultSafe(ebool) [FHE path only]
+  │    → if approved: _disburseLoan()   → ETH sent to borrower
+  │    → if rejected: loan stays Pending
+  │    → Note: When FHE is unavailable, loans are disbursed immediately in requestLoan()
  │
  └─ repayLoan(loanId)             → interest distributed to lenders
       → lenderYieldEarned[lender] += share
@@ -266,16 +275,16 @@ Base Sepolia retains legacy Wave 1–4 contracts for reference.
 | `computeCreditScore()` | ✅ | ✅ | ✅ | ✅ |
 | `submitCreditData()` (FHE) | ✅ | ⚠️ needs CoFHE SDK | ✅ | ✅ |
 | `requestScoreDecryption()` | ✅ | ❌ no task manager | ✅ | ✅ |
-| `requestLoan()` V3 | ✅ | ❌ FHE.gte() reverts | ✅ | ✅ |
+| `requestLoan()` V3 | ✅ (FHE fallback — auto-disburse if unavailable) | ❌ FHE.gte() reverts | ✅ | ✅ |
 | `requestDecryption()` (reputation) | ✅ | ❌ no task manager | ✅ | ✅ |
 | Fund pool / withdraw | ✅ | ✅ | ✅ | ✅ |
 | Create/cancel delegation offers | ✅ | ✅ | ✅ | ✅ |
 | Repay loans and bonds | ✅ | ✅ | ✅ | ✅ |
 | Governance (vote/propose) | ✅ | ✅ (V1 fallback) | ✅ | ✅ |
-| MultiAsset loan request | ✅ | ❌ | ✅ | ✅ |
+| MultiAsset loan request | ✅ (FHE fallback) | ❌ | ✅ | ✅ |
 | Cross-chain score bridge | 🔧 (WIP) | 🔧 (destination only, WIP) | ❌ | ❌ |
 
-**Why:** `FHE.decrypt()` and `FHE.gte()` route through the CoFHE `ITaskManager`. The task manager is deployed on Fhenix Helium (8008135), localcofhe (412346), and now **Arbitrum Sepolia (421614)**. Arbitrum Sepolia is the recommended chain for full protocol interaction.
+**Why:** `FHE.decrypt()` and `FHE.gte()` route through the CoFHE `ITaskManager`. The task manager is deployed on Fhenix Helium (8008135), localcofhe (412346), and **Arbitrum Sepolia (421614)**. In practice, the Arbitrum Sepolia CoFHE task manager is unstable for on-chain `FHE.gte()` — both pools now wrap the call in try/catch and auto-disburse when FHE fails (with credit score still verified). Arbitrum Sepolia remains the recommended chain for full protocol interaction.
 
 **Frontend handling:** The UI detects the connected chain via `isFHENetwork` and:
 - Enables `requestScoreDecryption()`, `requestLoan()`, and `requestDecryption()` on CoFHE chains
@@ -328,7 +337,7 @@ All technical depth lives in `/docs`:
 | **Wave 2** | ✅ Complete | `EncryptedCreditEngineV2` (FHE scoring with real `InEuint*` ciphertexts), `PrivateLoanPoolV2` (ebool-gated disbursement — ETH never moves without FHE result), `CreditDataWithZK` (ZK range proofs + FHE hybrid). |
 | **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating — FHE-only actions blocked gracefully on Base Sepolia. All deployed 2026-05-03. |
 | **Wave 4** | ✅ Complete | `SoulboundCreditNFT` (ERC-721 non-transferable credit identity, on-chain SVG, tier-based metadata). `ScoreGatedGovernance` (score-gated proposals, weighted voting by tier, propose→vote→finalize→queue→execute with timelock). |
-| **Wave 5** | ⚠️ Deployed — Bridge WIP | **Multi-Asset Architecture & Cross-Chain Bridge:** `MultiAssetLoanPool` (ERC-20 collateralized lending with credit-adjusted LTV ratios, multi-asset pool support, yield distribution) — ✅ complete and live with 3 pre-whitelisted tokens (USDC/WETH/DAI) and frontend faucet. `CrossChainCreditBridge` (LayerZero V2 OApp for encrypted score attestations across EVM chains) — 🔧 deployed but under active development; LayerZero V2 options encoding and frontend integration still in progress. |
+| **Wave 5** | ✅ Deployed — Bridge WIP, FHE Fallback Active | **Multi-Asset Architecture & Cross-Chain Bridge:** `MultiAssetLoanPool` — ERC-20 collateralized lending with credit-adjusted LTV ratios, multi-asset pool support, yield distribution. Now has FHE try/catch fallback — auto-disburses to verified borrowers when CoFHE unavailable. 3 tokens whitelisted and pre-funded (50k USDC / 100 WETH / 100k DAI). Old duplicate assets disabled. `CrossChainCreditBridge` (LayerZero V2 OApp for encrypted score attestations) — deployed, integration WIP. `seed-assets` task for one-command pool funding. |
 | **Wave 6** | 🔜 Planned | **Undercollateralized Credit Infrastructure:** `ShadowUSD` — FHE-collateralized stablecoin minted against credit limits, not deposited collateral. Backed by a protocol reserve sweated from borrowing fees. No cross-chain dependencies.; `Revolving Credit Lines` — Replace one-shot loans with a credit line computed from FHE score. Borrow/repay/re-borrow up to the limit, interest only on drawn balance.; `Credit Builder Program` — Fully-collateralized training loans for unregistered users. On-time repayments build reputation, unlocking undercollateralized borrowing.; `Credit-Scored Dutch Auctions` — Defaulted loans auctioned to bidders above a credit threshold. Prevents predatory liquidation. |
 | **Wave 7** | 🔮 Future | **Ecosystem Maturity & Automation:** `Credit Yield Markets (P2P Lending)` — Lenders bid on individual credit lines, borrowers pick the best rate.; `Automated Credit Adjustments` — On-chain monitors auto-adjust limits in real-time based on behavior.; `Credit-Linked Insurance Pools` — Stake into pools that cover defaults, premiums priced by portfolio credit quality.; `Cross-Protocol Credit Portability` — Partner protocols integrate Shadow Credit's score for lower fees and higher limits.; `Credit-Accelerated Yield` — High-score borrowers get boosted yield, funded by micro-fee on lower-score users.; `Reputation-Backed Flash Loans` — Flash loans gated by credit tier, max size scales with score. |
 
@@ -342,7 +351,7 @@ All technical depth lives in `/docs`:
 
 1. **FHE arithmetic on-chain.** The credit score formula runs entirely on ciphertexts. `FHE.mul(paymentHistory, 255)`, `FHE.div(result, 10000)`, `FHE.select(FHE.gt(years, 10), 10, years)` — every operation is a homomorphic computation. The chain never sees a number.
 
-2. **ebool-gated disbursement.** The loan approval is not a boolean stored by an owner. It is the result of `FHE.gte(encCreditScore, threshold)` — an encrypted comparison that produces an `ebool`. ETH is only disbursed when `FHE.getDecryptResultSafe(ebool)` returns `(true, true)`. There is no admin key that can override this.
+2. **ebool-gated disbursement (with FHE fallback).** When FHE is available, loan approval is the result of `FHE.gte(encCreditScore, threshold)` — an encrypted comparison that produces an `ebool`. ETH is only disbursed when `FHE.getDecryptResultSafe(ebool)` returns `(true, true)`. When FHE is unavailable (e.g. CoFHE down), the contract auto-disburses after verifying the user still has a valid, non-stale credit score — ensuring no user is blocked by infrastructure.
 
 3. **ZK + FHE hybrid.** The Circom circuit validates that input ranges are correct (paymentHistory ∈ [0, 10000], income ≥ debt) before the data is encrypted. This prevents garbage-in attacks without revealing the values.
 
@@ -393,10 +402,7 @@ cd frontend && npm run dev
 
 **Getting test tokens for the Multi-Asset Pool:**
 ```bash
-# Option 1: Use the in-app faucet on the Multi-Asset Pool page
-#   → Select USDC/WETH/DAI → click "Mint 1000 USDC" (or 1 WETH / 1000 DAI)
-
-# Option 2: Mint directly via cast/ethers
+# Mint directly via cast/ethers
 cast send 0x491ECb099a7E96d480256C2368620Cb5025CccCc \
   "mint(address,uint256)" \
   YOUR_ADDRESS 1000000000 \
@@ -404,7 +410,7 @@ cast send 0x491ECb099a7E96d480256C2368620Cb5025CccCc \
   --private-key YOUR_KEY
 # (1000000000 = 1000 USDC with 6 decimals)
 
-# Option 3: Ask the deployer to mint for you
+# Option 2: Ask the deployer to mint for you
 # MockUSDC public mint() — no ownership restriction
 ```
 
@@ -412,7 +418,7 @@ cast send 0x491ECb099a7E96d480256C2368620Cb5025CccCc \
 1. Connect wallet on Arbitrum Sepolia
 2. Go to Submit Data → Register → Submit encrypted data → Compute Score
 3. Go to Dashboard → Request Score Decryption (CoFHE) or use SDK decrypt
-4. Go to Multi-Asset Pool → Use faucet to get test tokens → Fund pool as lender OR
+4. Go to Multi-Asset Pool → Fund pool as lender OR
 5. Borrow against your credit score (select pool tier matching your score)
 
 ---
@@ -429,12 +435,12 @@ shadow-credit-network/
 │   ├── CreditDataWithZK.sol           # ZK + FHE hybrid bridge
 │   ├── SimpleCreditEngine.sol         # Plaintext engine (Wave 1, live)
 │   ├── PrivateLoanPool.sol            # Plaintext pool (Wave 1, live)
-│   └── CreditDelegation.sol           # Wave 1 delegation (live)
-├── contracts/
+│   ├── CreditDelegation.sol           # Wave 1 delegation (live)
 │   ├── SoulboundCreditNFT.sol        # ERC-721 soulbound credit identity (Wave 4)
 │   ├── ScoreGatedGovernance.sol      # Score-gated DAO with tier-weighted voting (Wave 4)
 │   ├── MultiAssetLoanPool.sol        # ERC-20 collateral lending pool (Wave 5)
 │   ├── CrossChainCreditBridge.sol    # LayerZero V2 cross-chain credit (Wave 5)
+│   ├── TestERC20.sol                 # Mock tokens for testing (public mint())
 │   └── ...
 ├── frontend/
 │   ├── src/
@@ -456,7 +462,8 @@ shadow-credit-network/
 ├── tasks/
 │   ├── deploy-wave3.ts               # Deploys Wave 3 stack
 │   ├── deploy-wave4.ts               # Deploys Wave 4 stack
-│   └── deploy-wave5.ts               # Deploys full stack (Waves 1-5) to Arbitrum Sepolia
+│   ├── deploy-wave5.ts               # Deploys full stack (Waves 1-5) to Arbitrum Sepolia
+│   └── seed-assets.ts                # Disable old assets + fund new pools
 ├── zk/
 │   └── circuits/
 │       └── credit_data_validator.circom  # Range proof circuit

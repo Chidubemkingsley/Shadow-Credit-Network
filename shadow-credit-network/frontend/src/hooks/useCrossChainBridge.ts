@@ -165,19 +165,20 @@ export function useCrossChainBridge() {
       setQuotedFee(fee);
       return fee;
     } catch (err: any) {
-      // The LZ endpoint reverts when no trusted remote / peer is configured for
-      // the destination chain. This is a setup issue, not a user error — the
-      // bridge owner needs to call setTrustedRemote(dstEid, remoteAddress).
       const msg: string = err?.message ?? String(err);
-      const isSetupError =
-        msg.includes("No trusted remote") ||
-        msg.includes("unknown custom error") ||
-        msg.includes("CALL_EXCEPTION");
-      if (isSetupError) {
+      const data: string = (err as any)?.data ?? "";
+      // 0x6592671c = LZ endpoint internal error (options encoding / peer not set)
+      // This means the contract needs redeployment with the fixed quote() signature
+      if (data.startsWith("0x6592671c") || msg.includes("unknown custom error")) {
+        setError(
+          "Bridge contract needs to be redeployed — the LayerZero endpoint " +
+          "rejected the fee quote due to an options encoding issue. " +
+          "Run: npx hardhat deploy-bridge --network arb-sepolia --redeploy"
+        );
+      } else if (msg.includes("No trusted remote") || msg.includes("CALL_EXCEPTION")) {
         setError(
           `Bridge is not configured for destination chain ${dstEid}. ` +
-          `The contract owner must call setTrustedRemote(${dstEid}, remoteAddress) ` +
-          `before cross-chain sends are available.`
+          `Run: npx hardhat configure-bridge --network arb-sepolia --dsteid ${dstEid}`
         );
       } else {
         setError(parseContractError(err));

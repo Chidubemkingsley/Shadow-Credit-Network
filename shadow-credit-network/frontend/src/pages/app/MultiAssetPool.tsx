@@ -50,9 +50,9 @@ export default function MultiAssetPool() {
   const [selectedAsset, setSelectedAsset] = useState<string>("");
   const [fundAmount, setFundAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [loanAmount, setLoanAmount] = useState("0.01");
+  const [loanAmount, setLoanAmount] = useState("");
   const [loanDays, setLoanDays] = useState("30");
-  const [selectedPool, setSelectedPool] = useState(0);
+  const [selectedPool, setSelectedPool] = useState(2); // default Aggressive — lowest minimum
   const [collateralToken, setCollateralToken] = useState("");
   const [collateralAmount, setCollateralAmount] = useState("");
   const [repayId, setRepayId] = useState<number | null>(null);
@@ -76,6 +76,27 @@ export default function MultiAssetPool() {
   const currentYield = selectedAsset ? (lenderYields[selectedAsset] ?? 0n) : 0n;
   const activeLoans = loans.filter((l) => l.status === 1);
   const pendingLoans = loans.filter((l) => l.status === 0);
+
+  // Compute minimum loan amount in token units for the selected pool + asset
+  const minLoanInTokens = (() => {
+    const cfg = poolConfigs[selectedPool];
+    if (!cfg || !currentAsset || currentAsset.priceUsd18 === 0n) return 0;
+    // minLoanAmount is in USD with 18 decimals
+    // tokenAmount = minUsd * 10^decimals / priceUsd18
+    const minUsd = cfg.minLoanAmount; // e.g. 10e18 for $10
+    const price = currentAsset.priceUsd18; // e.g. 1e18 for $1 USDC
+    const decimals = currentAsset.decimals;
+    // tokenAmount = minUsd / price * 10^decimals
+    const tokenAmountRaw = (minUsd * BigInt(10 ** decimals)) / price;
+    return Number(ethers.formatUnits(tokenAmountRaw, decimals));
+  })();
+
+  // Auto-set loan amount to minimum when asset or pool changes
+  useEffect(() => {
+    if (minLoanInTokens > 0) {
+      setLoanAmount(minLoanInTokens.toFixed(currentAsset?.decimals === 6 ? 2 : 4));
+    }
+  }, [selectedAsset, selectedPool, minLoanInTokens]);
 
   if (!isConnected) {
     return (
@@ -349,14 +370,43 @@ export default function MultiAssetPool() {
               Request Loan — {POOLS[selectedPool].name} Pool
             </h3>
 
+            {/* USD minimum info banner */}
+            {poolConfigs[selectedPool] && (
+              <div className="glass rounded-lg p-3 border border-primary/10 text-xs text-muted-foreground flex items-center gap-2">
+                <DollarSign className="w-3 h-3 text-primary shrink-0" />
+                Min loan: <span className="text-foreground font-semibold">
+                  ${Number(ethers.formatEther(poolConfigs[selectedPool].minLoanAmount)).toFixed(0)} USD
+                </span>
+                {currentAsset && (
+                  <span>
+                    = {minLoanInTokens.toFixed(currentAsset.decimals === 6 ? 2 : 4)} {currentAsset.symbol}
+                  </span>
+                )}
+                · Max: <span className="text-foreground font-semibold">
+                  ${Number(ethers.formatEther(poolConfigs[selectedPool].maxLoanAmount)).toLocaleString()} USD
+                </span>
+              </div>
+            )}
+
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">
                   Amount ({currentAsset?.symbol ?? "tokens"})
+                  {minLoanInTokens > 0 && (
+                    <span className="ml-1 text-xs text-muted-foreground/70">
+                      — min {minLoanInTokens.toFixed(currentAsset?.decimals === 6 ? 2 : 4)}
+                    </span>
+                  )}
                 </label>
-                <Input type="number" placeholder={`Max: ${availableAsset.toFixed(4)}`}
+                <Input type="number"
+                  placeholder={minLoanInTokens > 0 ? `Min: ${minLoanInTokens.toFixed(currentAsset?.decimals === 6 ? 2 : 4)}` : `Max: ${availableAsset.toFixed(4)}`}
                   value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)}
-                  className="bg-muted" min="0" step="0.01" />
+                  className="bg-muted" min={minLoanInTokens > 0 ? minLoanInTokens : 0} step="0.01" />
+                {loanAmount && minLoanInTokens > 0 && Number(loanAmount) < minLoanInTokens && (
+                  <p className="text-xs text-destructive">
+                    Below minimum — need at least {minLoanInTokens.toFixed(currentAsset?.decimals === 6 ? 2 : 4)} {currentAsset?.symbol}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">
@@ -405,7 +455,11 @@ export default function MultiAssetPool() {
             )}
 
             <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-              disabled={loading || !loanAmount || availableAsset === 0 || !profile.hasCreditScore || !selectedAsset}
+              disabled={
+                loading || !loanAmount || availableAsset === 0 ||
+                !profile.hasCreditScore || !selectedAsset ||
+                (minLoanInTokens > 0 && Number(loanAmount) < minLoanInTokens)
+              }
               onClick={handleRequestLoan}>
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming in wallet…</>
@@ -413,6 +467,8 @@ export default function MultiAssetPool() {
                 ? "Compute Credit Score First"
                 : availableAsset === 0
                 ? "Insufficient Liquidity"
+                : minLoanInTokens > 0 && Number(loanAmount) < minLoanInTokens
+                ? `Min ${minLoanInTokens.toFixed(currentAsset?.decimals === 6 ? 2 : 4)} ${currentAsset?.symbol ?? ""}`
                 : <>Request Loan <ArrowRight className="w-4 h-4" /></>
               }
             </Button>
@@ -477,14 +533,14 @@ export default function MultiAssetPool() {
                           </div>
 
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div>Principal: <span className="text-foreground">{ethers.formatUnits(loan.principal, 18)} {loan.tokenSymbol}</span></div>
-                            <div>Total owed: <span className="text-foreground">{ethers.formatUnits(loan.totalOwed, 18)} {loan.tokenSymbol}</span></div>
-                            <div>Repaid: <span className={loan.repaidAmount > 0n ? "text-success" : "text-foreground"}>{ethers.formatUnits(loan.repaidAmount, 18)} {loan.tokenSymbol}</span></div>
+                            <div>Principal: <span className="text-foreground">{ethers.formatUnits(loan.principal, poolState.assets.find(a=>a.address===loan.token)?.decimals ?? 18)} {loan.tokenSymbol}</span></div>
+                            <div>Total owed: <span className="text-foreground">{ethers.formatUnits(loan.totalOwed, poolState.assets.find(a=>a.address===loan.token)?.decimals ?? 18)} {loan.tokenSymbol}</span></div>
+                            <div>Repaid: <span className={loan.repaidAmount > 0n ? "text-success" : "text-foreground"}>{ethers.formatUnits(loan.repaidAmount, poolState.assets.find(a=>a.address===loan.token)?.decimals ?? 18)} {loan.tokenSymbol}</span></div>
                             {loan.status === 1 && remaining > 0n && (
-                              <div>Remaining: <span className="text-warning">{ethers.formatUnits(remaining, 18)} {loan.tokenSymbol}</span></div>
+                              <div>Remaining: <span className="text-warning">{ethers.formatUnits(remaining, poolState.assets.find(a=>a.address===loan.token)?.decimals ?? 18)} {loan.tokenSymbol}</span></div>
                             )}
                             {loan.collateralPosted && loan.collateralToken !== ethers.ZeroAddress && (
-                              <div>Collateral: <span className="text-foreground">{ethers.formatUnits(loan.collateralAmount, 18)} {loan.collateralToken.slice(0, 6)}…</span></div>
+                              <div>Collateral: <span className="text-foreground">{ethers.formatUnits(loan.collateralAmount, poolState.assets.find(a=>a.address===loan.collateralToken)?.decimals ?? 18)} {poolState.assets.find(a=>a.address===loan.collateralToken)?.symbol ?? loan.collateralToken.slice(0,6)}…</span></div>
                             )}
                           </div>
 
@@ -530,7 +586,11 @@ export default function MultiAssetPool() {
                               </div>
                             ) : (
                               <Button size="sm" className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                onClick={() => { setRepayId(loan.id); setRepayAmount(ethers.formatUnits(remaining, 18)); }}>
+                                onClick={() => {
+                                  setRepayId(loan.id);
+                                  const dec = poolState.assets.find(a=>a.address===loan.token)?.decimals ?? 18;
+                                  setRepayAmount(ethers.formatUnits(remaining, dec));
+                                }}>
                                 Repay
                               </Button>
                             )

@@ -20,7 +20,7 @@ struct MessagingFee {
 
 /// @notice Minimal LZ V2 endpoint interface (matches deployed Arbitrum Sepolia endpoint).
 interface ILayerZeroEndpoint {
-    function quote(SendParam calldata _sendParam, address _payInLzToken)
+    function quote(SendParam calldata _sendParam, bool _payInLzToken)
         external view returns (MessagingFee memory msgFee);
     function send(SendParam calldata _sendParam, bytes calldata _extraOptions, address _refundAddress)
         external payable returns (bytes32 msgHash);
@@ -188,21 +188,36 @@ contract CrossChainCreditBridge is Ownable, ILayerZeroReceiver {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Quote the LZ messaging fee for sending a score to dstEid.
+    /// @dev Uses a dummy attestation payload for fee estimation — the actual
+    ///      payload size is identical regardless of score values, so the fee
+    ///      is accurate. This avoids reverting when called by address(0) via
+    ///      a static call from the frontend.
     function quoteSend(uint32 dstEid) external view returns (uint256 nativeFee) {
         require(address(endpoint) != address(0), "No endpoint");
         bytes32 receiver = trustedRemotes[dstEid];
         require(receiver != bytes32(0), "No trusted remote for dstEid");
-        ScoreAttestation memory att = _buildAttestation(msg.sender, dstEid);
-        bytes memory payload = abi.encode(att);
+
+        // Build a dummy attestation with the same ABI layout as the real one.
+        // Payload size is constant so the fee estimate is exact.
+        ScoreAttestation memory dummy = ScoreAttestation({
+            user:          msg.sender,
+            score:         300,
+            tier:          uint8(CreditTier.DeepSubprime),
+            computedAt:    block.timestamp,
+            expiresAt:     block.timestamp + 180 days,
+            historyLength: 1,
+            srcEid:        localEid
+        });
+        bytes memory payload = abi.encode(dummy);
         bytes memory options = _defaultOptions();
         SendParam memory sp = SendParam({
-            dstEid: dstEid,
-            receiver: receiver,
-            message: payload,
-            options: options,
+            dstEid:       dstEid,
+            receiver:     receiver,
+            message:      payload,
+            options:      options,
             payInLzToken: false
         });
-        MessagingFee memory fee = endpoint.quote(sp, address(0));
+        MessagingFee memory fee = endpoint.quote(sp, false);
         nativeFee = fee.nativeFee;
     }
 
@@ -238,7 +253,7 @@ contract CrossChainCreditBridge is Ownable, ILayerZeroReceiver {
         });
 
         // Quote and enforce fee
-        MessagingFee memory fee = endpoint.quote(sp, address(0));
+        MessagingFee memory fee = endpoint.quote(sp, false);
         if (msg.value < fee.nativeFee) revert InsufficientFee();
 
         bytes32 guid = endpoint.send{value: msg.value}(sp, "", msg.sender);

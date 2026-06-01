@@ -115,12 +115,34 @@ export default function Governance() {
     }
   }, [provider]);
 
+  const [creditEngineState, setCreditEngineState] = useState<{
+    isRegistered: boolean;
+    hasCreditScore: boolean;
+  }>({ isRegistered: false, hasCreditScore: false });
+
   // ── Check voter eligibility ────────────────────────────────────────────────
   const loadEligibility = useCallback(async () => {
     if (!address || !provider || !ADDRESSES.governance) return;
     try {
       const gov = getGovernanceContract(provider);
       if (!gov) return;
+
+      // Also check credit engine state so we can show the right prerequisite
+      if (ADDRESSES.creditEngine) {
+        const engineABI = [
+          "function isRegistered(address) external view returns (bool)",
+          "function hasCreditScore(address) external view returns (bool)",
+        ];
+        const engine = new (await import("ethers")).ethers.Contract(
+          ADDRESSES.creditEngine, engineABI, provider
+        );
+        const [isReg, hasScore] = await Promise.all([
+          engine.isRegistered(address).catch(() => false),
+          engine.hasCreditScore(address).catch(() => false),
+        ]);
+        setCreditEngineState({ isRegistered: isReg, hasCreditScore: hasScore });
+      }
+
       const [eli, cp, gs] = await Promise.all([
         gov.isEligibleVoter(address),
         gov.isEligibleProposer(address),
@@ -145,6 +167,17 @@ export default function Governance() {
   // ── Submit / Reset governance score ────────────────────────────────────────
   async function submitGovernanceScore() {
     if (!signer || !ADDRESSES.governance || !scoreInput) return;
+
+    // Pre-flight: contract requires isRegistered + hasCreditScore on the engine
+    if (!creditEngineState.isRegistered) {
+      setError("You must register on the credit engine first. Go to Submit Data → Register Wallet.");
+      return;
+    }
+    if (!creditEngineState.hasCreditScore) {
+      setError("You must compute a credit score first. Go to Submit Data → Compute Score.");
+      return;
+    }
+
     setTxLoading(true); setError("");
     try {
       const gov = getGovernanceContract(signer);
@@ -302,19 +335,54 @@ export default function Governance() {
             <span className="text-xs text-muted-foreground">Revealed score: {revealedScore}</span>
           )}
         </div>
+
+        {/* Prerequisite checklist */}
+        {isConnected && (
+          <div className="flex flex-wrap gap-3 text-xs">
+            <span className={`flex items-center gap-1 px-2 py-1 rounded-full border font-semibold ${
+              creditEngineState.isRegistered
+                ? "bg-success/10 text-success border-success/20"
+                : "bg-muted text-muted-foreground border-border"
+            }`}>
+              {creditEngineState.isRegistered ? "✓" : "○"} Registered
+            </span>
+            <span className={`flex items-center gap-1 px-2 py-1 rounded-full border font-semibold ${
+              creditEngineState.hasCreditScore
+                ? "bg-success/10 text-success border-success/20"
+                : "bg-muted text-muted-foreground border-border"
+            }`}>
+              {creditEngineState.hasCreditScore ? "✓" : "○"} Credit Score Computed
+            </span>
+          </div>
+        )}
+
+        {isConnected && !creditEngineState.isRegistered && (
+          <p className="text-xs text-warning flex items-center gap-1.5">
+            <AlertTriangle className="w-3 h-3 shrink-0"/>
+            Register on the credit engine first — go to <strong>Submit Data</strong> and click Register Wallet.
+          </p>
+        )}
+        {isConnected && creditEngineState.isRegistered && !creditEngineState.hasCreditScore && (
+          <p className="text-xs text-warning flex items-center gap-1.5">
+            <AlertTriangle className="w-3 h-3 shrink-0"/>
+            Compute a credit score first — go to <strong>Submit Data</strong> and click Compute Score.
+          </p>
+        )}
+
         <p className="text-xs text-muted-foreground">
-          The CoFHE on-chain decryption path is currently unavailable. 
-          Decrypt your score privately on the Reputation page, then submit it here to become governance-eligible.
-          Accepts both credit scores (300–850) and reputation basis points (0–10000).
-          Your score lives on-chain only while you want it — call <strong>Reset</strong> to remove it.
+          Decrypt your score on the Dashboard or Reputation page, then enter it below to become governance-eligible.
+          Accepts credit scores (300–850). Your score lives on-chain only while you want it — Reset removes it.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <input type="number" min={300} max={850}
             className="w-28 bg-muted rounded-lg px-3 py-2 text-sm border border-border focus:outline-none focus:border-primary"
-            placeholder="e.g. 5000" value={scoreInput}
+            placeholder="e.g. 720" value={scoreInput}
             onChange={e => setScoreInput(e.target.value)} disabled={txLoading}/>
           <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
-            disabled={!isConnected || txLoading || !scoreInput || Number(scoreInput) < 300}
+            disabled={
+              !isConnected || txLoading || !scoreInput || Number(scoreInput) < 300 ||
+              !creditEngineState.isRegistered || !creditEngineState.hasCreditScore
+            }
             onClick={submitGovernanceScore}>
             {txLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Eye className="w-3 h-3"/>}
             Submit Score

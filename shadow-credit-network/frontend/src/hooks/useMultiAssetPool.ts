@@ -291,7 +291,22 @@ export function useMultiAssetPool() {
       await tx.wait();
       await Promise.all([loadPoolState(), loadLoans()]);
     } catch (err: any) {
-      setError(parseContractError(err));
+      // BelowMinimum fires when principalUsd < config.minLoanAmount
+      // The min is in USD — make the message actionable
+      const raw = parseContractError(err);
+      if (raw.includes("BelowMinimum") || raw.includes("Below")) {
+        setError("Amount is below the pool minimum (in USD value). Increase the amount or switch to a lower-tier pool.");
+      } else if (raw.includes("NoCreditScore")) {
+        setError("No credit score found — compute your score on the Submit Data page first.");
+      } else if (raw.includes("StaleScore")) {
+        setError("Credit score is stale (180+ days) — recompute your score first.");
+      } else if (raw.includes("AssetNotWhitelisted")) {
+        setError("This asset is not whitelisted for collateral.");
+      } else if (raw.includes("InsufficientLiquidity")) {
+        setError("Insufficient pool liquidity for this amount.");
+      } else {
+        setError(raw);
+      }
     } finally { setLoading(false); }
   }, [getWriteContract, loadPoolState, loadLoans]);
 

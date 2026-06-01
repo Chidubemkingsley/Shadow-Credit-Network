@@ -7,9 +7,10 @@ import { ethers } from "ethers";
 import { useWallet } from "@/lib/wallet";
 import { useMultiAssetPool, AssetInfo, MultiLoan } from "@/hooks/useMultiAssetPool";
 import { useCreditEngine } from "@/hooks/useCreditEngine";
+import { parseContractError, MOCK_TOKENS } from "@/lib/contracts";
 import {
-  AlertTriangle, CheckCircle2, Loader2, RefreshCw,
-  TrendingUp, ArrowRight, Clock, Shield, DollarSign,
+  AlertTriangle, CheckCircle2, DollarSign, Loader2, RefreshCw,
+  TrendingUp, ArrowRight, Clock, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +35,7 @@ function StatusBadge({ status, label }: { status: number; label: string }) {
 }
 
 export default function MultiAssetPool() {
-  const { isConnected, address } = useWallet();
+  const { isConnected, address, signer } = useWallet();
   const {
     poolState, loans, lenderDeposits, lenderYields, poolConfigs,
     loading, error, txHash, paused,
@@ -337,6 +338,51 @@ export default function MultiAssetPool() {
               Your credit score is stale (180+ days). Recompute before requesting a loan.
             </div>
           )}
+
+          {/* Per-asset liquidity banner — show if the selected asset has no available liquidity */}
+          {currentAsset && availableAsset === 0 && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-xl p-4 border border-warning/40 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-warning mt-0.5 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="font-semibold text-sm text-warning">
+                  No {currentAsset.symbol} available — fund it before borrowing
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The {currentAsset.symbol} pool is empty. Switch to the <strong>Lend</strong> tab and deposit {currentAsset.symbol} first.
+                  {poolState.assets.filter(a => a.address !== selectedAsset && a.totalLiquidity > 0n).length > 0 && (
+                    <span> Or switch to a different asset that has liquidity.</span>
+                  )}
+                </p>
+                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1 text-xs"
+                  onClick={() => setActiveTab("lend")}>
+                  Go to Lend tab <ArrowRight className="w-3 h-3" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Show which assets have liquidity */}
+
+          {/* Liquidity availability indicator */}
+          <div className="glass rounded-xl p-3 flex flex-wrap gap-2">
+            <span className="text-xs text-muted-foreground mr-1 self-center">Available liquidity:</span>
+            {poolState.assets.filter(a => a.enabled).map(a => {
+              const avail = a.totalLiquidity - a.totalLoanedOut;
+              const isSelected = a.address === selectedAsset;
+              return (
+                <span key={a.address} className={cn(
+                  "text-xs px-2 py-0.5 rounded-full font-medium",
+                  isSelected ? "ring-1 ring-primary" : "",
+                  avail > 0n ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                )}>
+                  {a.symbol}: {avail > 0n
+                    ? `${Number(ethers.formatUnits(avail, a.decimals)).toFixed(a.decimals === 6 ? 2 : 4)}`
+                    : "0"}
+                </span>
+              );
+            })}
+          </div>
 
           {/* Pool selector */}
           <div className="grid md:grid-cols-3 gap-4">

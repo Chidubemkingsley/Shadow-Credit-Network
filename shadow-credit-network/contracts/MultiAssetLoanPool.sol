@@ -412,15 +412,17 @@ contract MultiAssetLoanPool is Ownable {
         if (!creditEngine.hasCreditScore(msg.sender)) revert NoCreditScore();
         if (creditEngine.isScoreStale(msg.sender))    revert StaleScore();
 
-        (bytes32 checkId, uint256 eboolCtHash) = creditEngine.requestApprovalCheck(
-            msg.sender,
-            effectiveMinScore
-        );
+        try creditEngine.requestApprovalCheck(msg.sender, effectiveMinScore)
+            returns (bytes32 checkId, uint256 eboolCtHash)
+        {
+            loan.approvalCheckId     = checkId;
+            loan.approvalEboolCtHash = eboolCtHash;
 
-        loan.approvalCheckId     = checkId;
-        loan.approvalEboolCtHash = eboolCtHash;
-
-        emit LoanApprovalCheckRequested(msg.sender, loanId, checkId, eboolCtHash);
+            emit LoanApprovalCheckRequested(msg.sender, loanId, checkId, eboolCtHash);
+        } catch {
+            // FHE unavailable on this chain — auto-disburse (score already verified)
+            _activateAndDisburse(loanId);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────

@@ -88,35 +88,39 @@ export function useMultiAssetPool() {
     try {
       const assetCount = Number(await contract.getAssetCount());
 
-      const assets: AssetInfo[] = [];
-      for (let i = 0; i < assetCount; i++) {
-        const tokenAddr: string = await contract.assetList(i);
-        const cfg = await contract.assets(tokenAddr);
-        assets.push({
-          address: tokenAddr,
-          enabled: cfg.enabled,
-          decimals: Number(cfg.decimals),
-          symbol: cfg.symbol,
-          priceUsd18: cfg.priceUsd18,
-          totalLiquidity: cfg.totalLiquidity,
-          totalLoanedOut: cfg.totalLoanedOut,
-          totalInterest: cfg.totalInterest,
-        });
-      }
-
-      // Load pool configs (3 risk tiers)
-      const cfgs: Record<number, PoolConfig> = {};
-      for (let i = 0; i < 3; i++) {
-        try {
-          const c = await contract.poolConfigs(i);
-          cfgs[i] = {
-            baseInterestRate: c.baseInterestRate,
-            maxDuration: c.maxDuration,
-            minCreditScore: c.minCreditScore,
-            minLoanAmount: c.minLoanAmount,
-            maxLoanAmount: c.maxLoanAmount,
+      // Parallel: fetch all asset details concurrently
+      const assets: AssetInfo[] = await Promise.all(
+        Array.from({ length: assetCount }, async (_, i) => {
+          const tokenAddr: string = await contract.assetList(i);
+          const cfg = await contract.assets(tokenAddr);
+          return {
+            address: tokenAddr,
+            enabled: cfg.enabled,
+            decimals: Number(cfg.decimals),
+            symbol: cfg.symbol,
+            priceUsd18: cfg.priceUsd18,
+            totalLiquidity: cfg.totalLiquidity,
+            totalLoanedOut: cfg.totalLoanedOut,
+            totalInterest: cfg.totalInterest,
           };
-        } catch {}
+        })
+      );
+
+      // Parallel: load pool configs (3 risk tiers)
+      const cfgs: Record<number, PoolConfig> = {};
+      const poolResults = await Promise.all(
+        [0, 1, 2].map(i => contract.poolConfigs(i).then((c: any) => ({ i, c })).catch(() => null))
+      );
+      for (const r of poolResults) {
+        if (r) {
+          cfgs[r.i] = {
+            baseInterestRate: r.c.baseInterestRate,
+            maxDuration: r.c.maxDuration,
+            minCreditScore: r.c.minCreditScore,
+            minLoanAmount: r.c.minLoanAmount,
+            maxLoanAmount: r.c.maxLoanAmount,
+          };
+        }
       }
       setPoolConfigs(cfgs);
 
@@ -124,19 +128,20 @@ export function useMultiAssetPool() {
       try { pcPaused = await contract.paused(); } catch {}
       setPaused(pcPaused);
 
-      // Load lender deposits + yields for each asset
+      // Parallel: load lender deposits + yields for each asset
       if (address && assets.length > 0) {
+        const results = await Promise.all(
+          assets.map(async (asset) => {
+            const [depAmt, depAt] = await contract.getLenderDeposit(asset.address, address).catch(() => [0n, 0n]);
+            const yieldAmt = await contract.lenderYieldEarned(asset.address, address).catch(() => 0n);
+            return { addr: asset.address, depAmt, depAt, yieldAmt };
+          })
+        );
         const deposits: Record<string, { amount: bigint; depositedAt: number }> = {};
         const yields: Record<string, bigint> = {};
-        for (const asset of assets) {
-          try {
-            const [amt, depAt] = await contract.getLenderDeposit(asset.address, address);
-            if (amt > 0n) deposits[asset.address] = { amount: amt, depositedAt: Number(depAt) };
-          } catch {}
-          try {
-            const y = await contract.lenderYieldEarned(asset.address, address);
-            if (y > 0n) yields[asset.address] = y;
-          } catch {}
+        for (const r of results) {
+          if (r.depAmt > 0n) deposits[r.addr] = { amount: r.depAmt, depositedAt: Number(r.depAt) };
+          if (r.yieldAmt > 0n) yields[r.addr] = r.yieldAmt;
         }
         setLenderDeposits(deposits);
         setLenderYields(yields);
@@ -296,14 +301,20 @@ export function useMultiAssetPool() {
       const raw = parseContractError(err);
       if (raw.includes("BelowMinimum") || raw.includes("Below")) {
         setError("Amount is below the pool minimum (in USD value). Increase the amount or switch to a lower-tier pool.");
-      } else if (raw.includes("NoCreditScore")) {
+      } else       if (raw.includes("NoCreditScore")) {
         setError("No credit score found — compute your score on the Submit Data page first.");
+      } else if (raw.includes("NoCreditData")) {
+        setError("No credit score data found — compute your score on the Submit Data page first.");
+      } else if (raw.includes("NotRegistered")) {
+        setError("Not registered — register your wallet on the Submit Data page first.");
       } else if (raw.includes("StaleScore")) {
         setError("Credit score is stale (180+ days) — recompute your score first.");
       } else if (raw.includes("AssetNotWhitelisted")) {
         setError("This asset is not whitelisted for collateral.");
       } else if (raw.includes("InsufficientLiquidity")) {
-        setError("Insufficient pool liquidity for this amount.");
+        setError("This asset has no available liquidity — fund the pool first or switch to a different asset.");
+      } else if (raw.includes("BelowMinimum") || raw.includes("Below")) {
+        setError("Amount is below the pool minimum (in USD value). Increase the amount or switch to a lower-tier pool.");
       } else {
         setError(raw);
       }

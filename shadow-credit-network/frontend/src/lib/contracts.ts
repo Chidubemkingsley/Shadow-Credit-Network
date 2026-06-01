@@ -38,6 +38,13 @@ export const ADDRESSES = {
 
 export const TASK_MANAGER_ADDRESS = "0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9";
 
+// Mock test tokens deployed alongside the protocol (public mint() enabled)
+export const MOCK_TOKENS: { address: string; symbol: string; label: string }[] = [
+  { address: "0x491ECb099a7E96d480256C2368620Cb5025CccCc", symbol: "USDC", label: "1000 USDC" },
+  { address: "0xDc44218E093f4E1959d7232550dBC56F6F76342E", symbol: "WETH", label: "1 WETH" },
+  { address: "0xe53179158d4E5221703dEf34903E04FBd98DF7f7", symbol: "DAI",  label: "1000 DAI" },
+];
+
 // ── Contract factory helpers ──────────────────────────────────────────────────
 
 export function getCreditEngineContract(signerOrProvider: ethers.Signer | ethers.Provider) {
@@ -137,6 +144,7 @@ export function parseContractError(err: any): string {
   if (msg.includes("StaleScore")) return "Credit score is stale — recompute your score first";
   if (msg.includes("NoCreditScore")) return "No credit score found — submit data and compute first";
   if (msg.includes("NotRegistered")) return "Not registered — register first";
+  if (msg.includes("NotEligible")) return "Not eligible for governance — register and compute a score first";
   if (msg.includes("AlreadyRegistered")) return "Already registered";
   if (msg.includes("InsufficientLiquidity")) return "Insufficient pool liquidity";
   if (msg.includes("NoYieldToClaim")) return "No yield to claim";

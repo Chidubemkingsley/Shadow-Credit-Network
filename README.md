@@ -8,7 +8,7 @@
 
 ![imagw](s2.png)
 
-## Live System — Wave 5 Complete
+## Live System — Wave 5 Deployed (Bridge WIP)
 
 **Primary Network:** Arbitrum Sepolia (Chain ID: 421614) — CoFHE enabled  
 **Legacy:** Base Sepolia (Chain ID: 84532) — Wave 1–3 reference
@@ -16,15 +16,25 @@
 ### Wave 3–5 — Arbitrum Sepolia (Live, CoFHE Enabled)
 | Contract | Address | Explorer |
 |---|---|---|
-| `ReputationRegistry` | `0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f` | [View](https://sepolia.arbiscan.io/address/0x9ed0C1FB6139F601b35F116a777edaA4aDfD303f) |
-| `EncryptedCreditEngineV3` | `0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1` | [View](https://sepolia.arbiscan.io/address/0xAA8e06Eaf2D92F0A3F1DA7b99edbB81A1a84B6A1) |
-| `PrivateLoanPoolV3` | `0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6` | [View](https://sepolia.arbiscan.io/address/0xFc4ad461C187ec8aD4dCA0F56EAD5D335A51A3D6) |
-| `CreditDelegationV2` | `0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0` | [View](https://sepolia.arbiscan.io/address/0xB7be092B0424e707D51b0B1B4F747E1AD7c055F0) |
-| `CreditDataWithZK` | `0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8` | [View](https://sepolia.arbiscan.io/address/0xD1089013241DA673a2EBc2F916ad1A8434Fcf3D8) |
-| `ScoreGatedGovernance` | `0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c` | [View](https://sepolia.arbiscan.io/address/0x7aC6f759f5487f787F0438AfCfC9fB04619D2A0c) |
-| `SoulboundCreditNFT` | `0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9` | [View](https://sepolia.arbiscan.io/address/0x55Ae431c4ACa7f422e927F7E26bDFd475c490AC9) |
-| `MultiAssetLoanPool` | `0x5566bB07eC68eC5a7eF6558E714B284dC4556c10` | [View](https://sepolia.arbiscan.io/address/0x5566bB07eC68eC5a7eF6558E714B284dC4556c10) |
-| `CrossChainCreditBridge` | `0xB82e06Ea47ACcA34E41511AcBb7c630035158816` | [View](https://sepolia.arbiscan.io/address/0xB82e06Ea47ACcA34E41511AcBb7c630035158816) |
+| `ReputationRegistry` | `0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad` | [View](https://sepolia.arbiscan.io/address/0x285661cff3A6E6f80184Cc3bb10b87c38643b2ad) |
+| `EncryptedCreditEngineV3` | `0xaaF38A665e74EdE56a7549B193e007B3976eF184` | [View](https://sepolia.arbiscan.io/address/0xaaF38A665e74EdE56a7549B193e007B3976eF184) |
+| `PrivateLoanPoolV3` | `0xC6360360cCF32bE622723e576D8bDA9fc3446F43` | [View](https://sepolia.arbiscan.io/address/0xC6360360cCF32bE622723e576D8bDA9fc3446F43) |
+| `CreditDelegationV2` | `0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5` | [View](https://sepolia.arbiscan.io/address/0x06B17Bac6fDFc018FD2c831431751a9808CBa5a5) |
+| `CreditDataWithZK` | `0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37` | [View](https://sepolia.arbiscan.io/address/0x5695FBc56e42Fb8b99612DA612eb984Bb58D7c37) |
+| `ScoreGatedGovernance` | `0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971` | [View](https://sepolia.arbiscan.io/address/0x68A0d6d7329B7f7Bffd74f2481f6DDD70aF16971) |
+| `SoulboundCreditNFT` | `0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6` | [View](https://sepolia.arbiscan.io/address/0x72fbfBD6260A543CF29ea7e2a175E7b4C482D7b6) |
+| `MultiAssetLoanPool` | `0x384B2460d7AC08Cef74B02E4D80108aDCa4B4A12` | [View](https://sepolia.arbiscan.io/address/0x384B2460d7AC08Cef74B02E4D80108aDCa4B4A12) |
+| `CrossChainCreditBridge` | `0xB95C4EeA0072f49a1166835E229Eef6aa7b02125` | [View](https://sepolia.arbiscan.io/address/0xB95C4EeA0072f49a1166835E229Eef6aa7b02125) |
+
+**Test Tokens (public `mint()` — faucet available in the UI):**
+| Token | Address | Explorer | Mint |
+|---|---|---|---|
+| MockUSDC (6 dec) | `0x491ECb099a7E96d480256C2368620Cb5025CccCc` | [View](https://sepolia.arbiscan.io/address/0x491ECb099a7E96d480256C2368620Cb5025CccCc) | `mint(addr, 1000000)` |
+| MockWETH (18 dec) | `0xDc44218E093f4E1959d7232550dBC56F6F76342E` | [View](https://sepolia.arbiscan.io/address/0xDc44218E093f4E1959d7232550dBC56F6F76342E) | `mint(addr, 1e18)` |
+| MockDAI (18 dec) | `0xe53179158d4E5221703dEf34903E04FBd98DF7f7` | [View](https://sepolia.arbiscan.io/address/0xe53179158d4E5221703dEf34903E04FBd98DF7f7) | `mint(addr, 1e21)` |
+
+**Pre-whitelisted on MultiAssetLoanPool** — prices set: USDC=$1.00, WETH=$3,500.00, DAI=$1.00.  
+**Faucet included in frontend** — Multi-Asset Pool page shows "Test Token Faucet" buttons (Mint 1000 USDC / 1 WETH / 1000 DAI). Any wallet can call `mint()` directly.
 
 ### Wave 3–4 — Base Sepolia (Legacy Reference)
 | Contract | Address | Explorer |
@@ -45,7 +55,7 @@
 | `CreditDelegation` | `0xA97c943555E92b7E8472118A3b058e72edcDC694` | [View](https://sepolia.basescan.org/address/0xA97c943555E92b7E8472118A3b058e72edcDC694) |
 
 **Deployer:** `0x90356CF97B3BF1749A604d3F89b3DF3602A459E3`  
-**Arbitrum Sepolia deployment:** 2026-06-01 · **Base Sepolia legacy:** 2026-05-03
+**Arbitrum Sepolia deployment:** 2026-06-01 · **Mock tokens + whitelist:** 2026-06-01 · **Base Sepolia legacy:** 2026-05-03
 
 ```bash
 # Verify any contract in 30 seconds
@@ -318,7 +328,7 @@ All technical depth lives in `/docs`:
 | **Wave 2** | ✅ Complete | `EncryptedCreditEngineV2` (FHE scoring with real `InEuint*` ciphertexts), `PrivateLoanPoolV2` (ebool-gated disbursement — ETH never moves without FHE result), `CreditDataWithZK` (ZK range proofs + FHE hybrid). |
 | **Wave 3** | ✅ Complete | `EncryptedCreditEngineV3` (score expiry, score history, borrowing power, cross-contract sharing), `PrivateLoanPoolV3` (lender yield distribution, loan refinancing), `CreditDelegationV2` (yield actually pays out, bond expiry), `ReputationRegistry` wired to all contracts. Network-aware frontend with `isFHENetwork` gating — FHE-only actions blocked gracefully on Base Sepolia. All deployed 2026-05-03. |
 | **Wave 4** | ✅ Complete | `SoulboundCreditNFT` (ERC-721 non-transferable credit identity, on-chain SVG, tier-based metadata). `ScoreGatedGovernance` (score-gated proposals, weighted voting by tier, propose→vote→finalize→queue→execute with timelock). |
-| **Wave 5** | ⚠️ Deployed — Bridge WIP | **Multi-Asset Architecture & Cross-Chain Bridge:** `MultiAssetLoanPool` (ERC-20 collateralized lending with credit-adjusted LTV ratios, multi-asset pool support, yield distribution) — ✅ complete and live. `CrossChainCreditBridge` (LayerZero V2 OApp for encrypted score attestations across EVM chains) — 🔧 deployed but under active development; LayerZero V2 options encoding and frontend integration still in progress. |
+| **Wave 5** | ⚠️ Deployed — Bridge WIP | **Multi-Asset Architecture & Cross-Chain Bridge:** `MultiAssetLoanPool` (ERC-20 collateralized lending with credit-adjusted LTV ratios, multi-asset pool support, yield distribution) — ✅ complete and live with 3 pre-whitelisted tokens (USDC/WETH/DAI) and frontend faucet. `CrossChainCreditBridge` (LayerZero V2 OApp for encrypted score attestations across EVM chains) — 🔧 deployed but under active development; LayerZero V2 options encoding and frontend integration still in progress. |
 | **Wave 6** | 🔜 Planned | **Undercollateralized Credit Infrastructure:** `ShadowUSD` — FHE-collateralized stablecoin minted against credit limits, not deposited collateral. Backed by a protocol reserve sweated from borrowing fees. No cross-chain dependencies.; `Revolving Credit Lines` — Replace one-shot loans with a credit line computed from FHE score. Borrow/repay/re-borrow up to the limit, interest only on drawn balance.; `Credit Builder Program` — Fully-collateralized training loans for unregistered users. On-time repayments build reputation, unlocking undercollateralized borrowing.; `Credit-Scored Dutch Auctions` — Defaulted loans auctioned to bidders above a credit threshold. Prevents predatory liquidation. |
 | **Wave 7** | 🔮 Future | **Ecosystem Maturity & Automation:** `Credit Yield Markets (P2P Lending)` — Lenders bid on individual credit lines, borrowers pick the best rate.; `Automated Credit Adjustments` — On-chain monitors auto-adjust limits in real-time based on behavior.; `Credit-Linked Insurance Pools` — Stake into pools that cover defaults, premiums priced by portfolio credit quality.; `Cross-Protocol Credit Portability` — Partner protocols integrate Shadow Credit's score for lower fees and higher limits.; `Credit-Accelerated Yield` — High-score borrowers get boosted yield, funded by micro-fee on lower-score users.; `Reputation-Backed Flash Loans` — Flash loans gated by credit tier, max size scales with score. |
 
@@ -380,6 +390,30 @@ cd frontend && npm run dev
 # Already configured in frontend/.env.local — just run:
 cd frontend && npm run dev
 ```
+
+**Getting test tokens for the Multi-Asset Pool:**
+```bash
+# Option 1: Use the in-app faucet on the Multi-Asset Pool page
+#   → Select USDC/WETH/DAI → click "Mint 1000 USDC" (or 1 WETH / 1000 DAI)
+
+# Option 2: Mint directly via cast/ethers
+cast send 0x491ECb099a7E96d480256C2368620Cb5025CccCc \
+  "mint(address,uint256)" \
+  YOUR_ADDRESS 1000000000 \
+  --rpc-url https://sepolia-rollup.arbitrum.io/rpc \
+  --private-key YOUR_KEY
+# (1000000000 = 1000 USDC with 6 decimals)
+
+# Option 3: Ask the deployer to mint for you
+# MockUSDC public mint() — no ownership restriction
+```
+
+**Testing flow:**
+1. Connect wallet on Arbitrum Sepolia
+2. Go to Submit Data → Register → Submit encrypted data → Compute Score
+3. Go to Dashboard → Request Score Decryption (CoFHE) or use SDK decrypt
+4. Go to Multi-Asset Pool → Use faucet to get test tokens → Fund pool as lender OR
+5. Borrow against your credit score (select pool tier matching your score)
 
 ---
 

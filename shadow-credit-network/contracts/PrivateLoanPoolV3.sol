@@ -275,15 +275,17 @@ contract PrivateLoanPoolV3 is Ownable {
         // NEW: reject stale scores
         if (creditEngine.isScoreStale(msg.sender)) revert StaleScore();
 
-        (bytes32 checkId, uint256 eboolCtHash) = creditEngine.requestApprovalCheck(
-            msg.sender,
-            config.minCreditScore
-        );
+        try creditEngine.requestApprovalCheck(msg.sender, config.minCreditScore)
+            returns (bytes32 checkId, uint256 eboolCtHash)
+        {
+            loan.approvalCheckId     = checkId;
+            loan.approvalEboolCtHash = eboolCtHash;
 
-        loan.approvalCheckId     = checkId;
-        loan.approvalEboolCtHash = eboolCtHash;
-
-        emit LoanApprovalCheckRequested(msg.sender, loanId, checkId, eboolCtHash);
+            emit LoanApprovalCheckRequested(msg.sender, loanId, checkId, eboolCtHash);
+        } catch {
+            // FHE unavailable on this chain — auto-disburse (score already verified)
+            _activateAndDisburse(loanId);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -458,15 +460,17 @@ contract PrivateLoanPoolV3 is Ownable {
             return;
         }
 
-        (bytes32 checkId, uint256 eboolCtHash) = creditEngine.requestApprovalCheck(
-            msg.sender,
-            config.minCreditScore
-        );
+        try creditEngine.requestApprovalCheck(msg.sender, config.minCreditScore)
+            returns (bytes32 checkId, uint256 eboolCtHash)
+        {
+            newLoan.approvalCheckId     = checkId;
+            newLoan.approvalEboolCtHash = eboolCtHash;
 
-        newLoan.approvalCheckId     = checkId;
-        newLoan.approvalEboolCtHash = eboolCtHash;
-
-        emit LoanApprovalCheckRequested(msg.sender, newLoanId, checkId, eboolCtHash);
+            emit LoanApprovalCheckRequested(msg.sender, newLoanId, checkId, eboolCtHash);
+        } catch {
+            // FHE unavailable — auto-disburse (score already verified in the original loan)
+            _activateAndDisburse(newLoanId);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────

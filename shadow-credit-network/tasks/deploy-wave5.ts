@@ -26,7 +26,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         // ═══════════════════════════════════════════════════════════════
 
         // ── 1. ReputationRegistry ──────────────────────────────────────
-        console.log('1/9  Deploying ReputationRegistry...')
+        console.log('1/11  Deploying ReputationRegistry...')
         const ReputationRegistry = await ethers.getContractFactory('ReputationRegistry')
         const repRegistry = await ReputationRegistry.deploy(
             deployer.address,
@@ -39,7 +39,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         console.log(`  ✓ ReputationRegistry: ${repAddr}`)
 
         // ── 2. EncryptedCreditEngineV3 ────────────────────────────────
-        console.log('\n2/9  Deploying EncryptedCreditEngineV3...')
+        console.log('\n2/11  Deploying EncryptedCreditEngineV3...')
         const EngineV3 = await ethers.getContractFactory('EncryptedCreditEngineV3')
         const engineV3 = await EngineV3.deploy(deployer.address)
         await engineV3.waitForDeployment()
@@ -53,7 +53,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         console.log('  ✓ Reputation wired to engine')
 
         // ── 3. PrivateLoanPoolV3 ──────────────────────────────────────
-        console.log('\n3/9  Deploying PrivateLoanPoolV3...')
+        console.log('\n3/11  Deploying PrivateLoanPoolV3...')
         const PoolV3 = await ethers.getContractFactory('PrivateLoanPoolV3')
         const poolV3 = await PoolV3.deploy(deployer.address)
         await poolV3.waitForDeployment()
@@ -69,7 +69,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         console.log('  ✓ Pool wired')
 
         // ── 4. CreditDelegationV2 ─────────────────────────────────────
-        console.log('\n4/9  Deploying CreditDelegationV2...')
+        console.log('\n4/11  Deploying CreditDelegationV2...')
         const DelegationV2 = await ethers.getContractFactory('CreditDelegationV2')
         const delegationV2 = await DelegationV2.deploy(deployer.address)
         await delegationV2.waitForDeployment()
@@ -84,7 +84,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         console.log('  ✓ Delegation wired')
 
         // ── 5. CreditDataWithZK ───────────────────────────────────────
-        console.log('\n5/9  Deploying CreditDataWithZK...')
+        console.log('\n5/11  Deploying CreditDataWithZK...')
         const ZKBridge = await ethers.getContractFactory('CreditDataWithZK')
         const zkBridge = await ZKBridge.deploy(deployer.address)
         await zkBridge.waitForDeployment()
@@ -101,7 +101,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         // ═══════════════════════════════════════════════════════════════
 
         // ── 6. ScoreGatedGovernance ────────────────────────────────────
-        console.log('\n6/9  Deploying ScoreGatedGovernance...')
+        console.log('\n6/11  Deploying ScoreGatedGovernance...')
         const Governance = await ethers.getContractFactory('ScoreGatedGovernance')
         const governance = await Governance.deploy(deployer.address, engineAddr, poolAddr)
         await governance.waitForDeployment()
@@ -110,7 +110,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         console.log(`  ✓ ScoreGatedGovernance: ${govAddr}`)
 
         // ── 7. SoulboundCreditNFT ──────────────────────────────────────
-        console.log('\n7/9  Deploying SoulboundCreditNFT...')
+        console.log('\n7/11  Deploying SoulboundCreditNFT...')
         const SoulboundNFT = await ethers.getContractFactory('SoulboundCreditNFT')
         const nft = await SoulboundNFT.deploy(deployer.address, engineAddr)
         await nft.waitForDeployment()
@@ -123,7 +123,7 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         // ═══════════════════════════════════════════════════════════════
 
         // ── 8. MultiAssetLoanPool ──────────────────────────────────────
-        console.log('\n8/9  Deploying MultiAssetLoanPool...')
+        console.log('\n8/11  Deploying MultiAssetLoanPool...')
         const MultiAssetPool = await ethers.getContractFactory('MultiAssetLoanPool')
         const multiPool = await MultiAssetPool.deploy(deployer.address)
         await multiPool.waitForDeployment()
@@ -136,8 +136,43 @@ task('deploy-wave5', 'Deploy full Shadow Credit stack to Arbitrum Sepolia (Waves
         await multiPool.setReputationRegistry(repAddr)
         console.log('  ✓ MultiAssetLoanPool wired')
 
+        // ── 8b. Deploy mock ERC-20 tokens for testing ──────────────────
+        console.log('\n8b/11  Deploying mock ERC-20 tokens...')
+        const TestERC20 = await ethers.getContractFactory('TestERC20')
+        const INITIAL_SUPPLY = ethers.parseUnits('1000000', 18)
+
+        const mockUSDC = await TestERC20.deploy('USD Coin', 'USDC', ethers.parseUnits('1000000', 6))
+        await mockUSDC.waitForDeployment()
+        const usdcAddr = await mockUSDC.getAddress()
+        deployed['MockUSDC'] = usdcAddr
+        console.log(`  ✓ MockUSDC (6 decimals): ${usdcAddr}`)
+
+        const mockWETH = await TestERC20.deploy('Wrapped Ether', 'WETH', INITIAL_SUPPLY)
+        await mockWETH.waitForDeployment()
+        const wethAddr = await mockWETH.getAddress()
+        deployed['MockWETH'] = wethAddr
+        console.log(`  ✓ MockWETH (18 decimals): ${wethAddr}`)
+
+        const mockDAI = await TestERC20.deploy('Dai Stablecoin', 'DAI', INITIAL_SUPPLY)
+        await mockDAI.waitForDeployment()
+        const daiAddr = await mockDAI.getAddress()
+        deployed['MockDAI'] = daiAddr
+        console.log(`  ✓ MockDAI (18 decimals): ${daiAddr}`)
+
+        // ── 8c. Whitelist assets on MultiAssetLoanPool ─────────────────
+        console.log('\n8c/11  Whitelisting assets on MultiAssetLoanPool...')
+        await multiPool.whitelistAsset(usdcAddr, 6, 'USDC', ethers.parseUnits('1', 18))
+        console.log('  ✓ USDC whitelisted (price: $1.00)')
+
+        await multiPool.whitelistAsset(wethAddr, 18, 'WETH', ethers.parseUnits('3500', 18))
+        console.log('  ✓ WETH whitelisted (price: $3,500.00)')
+
+        await multiPool.whitelistAsset(daiAddr, 18, 'DAI', ethers.parseUnits('1', 18))
+        console.log('  ✓ DAI whitelisted (price: $1.00)')
+        console.log('  ✓ MultiAssetLoanPool ready for borrowing')
+
         // ── 9. CrossChainCreditBridge ─────────────────────────────────
-        console.log('\n9/9  Deploying CrossChainCreditBridge...')
+        console.log('\n9/11  Deploying CrossChainCreditBridge...')
         const LZ_ENDPOINT_ARB_SEPOLIA = '0x6EDCE65403992e310A62460808c4b910D972f10f'
         const LZ_EID_ARB_SEPOLIA = 40231
         const Bridge = await ethers.getContractFactory('CrossChainCreditBridge')
@@ -185,6 +220,9 @@ VITE_CREDIT_NFT_ADDRESS=${nftAddr}
 
 # Wave 5 Contracts
 VITE_MULTI_ASSET_LOAN_POOL_ADDRESS=${multiPoolAddr}
+VITE_MOCK_USDC_ADDRESS=${usdcAddr}
+VITE_MOCK_WETH_ADDRESS=${wethAddr}
+VITE_MOCK_DAI_ADDRESS=${daiAddr}
 VITE_CROSS_CHAIN_CREDIT_BRIDGE_ADDRESS=${bridgeAddr}
 `
         fs.writeFileSync(frontendEnvPath, frontendEnvContent)
@@ -203,6 +241,9 @@ VITE_CROSS_CHAIN_CREDIT_BRIDGE_ADDRESS=${bridgeAddr}
                 { name: 'SoulboundCreditNFT',           addr: nftAddr,      args: [deployer.address, engineAddr] },
                 { name: 'MultiAssetLoanPool',           addr: multiPoolAddr, args: [deployer.address] },
                 { name: 'CrossChainCreditBridge',       addr: bridgeAddr,   args: [deployer.address, LZ_ENDPOINT_ARB_SEPOLIA, engineAddr, LZ_EID_ARB_SEPOLIA] },
+                { name: 'TestERC20',                    addr: usdcAddr,     args: ['USD Coin', 'USDC', ethers.parseUnits('1000000', 6)] },
+                { name: 'TestERC20',                    addr: wethAddr,     args: ['Wrapped Ether', 'WETH', INITIAL_SUPPLY] },
+                { name: 'TestERC20',                    addr: daiAddr,     args: ['Dai Stablecoin', 'DAI', INITIAL_SUPPLY] },
             ]
             for (const c of contractsToVerify) {
                 try {
@@ -233,8 +274,13 @@ VITE_CROSS_CHAIN_CREDIT_BRIDGE_ADDRESS=${bridgeAddr}
         console.log('  → requestDecryption() — reputation composite score')
         console.log('  → SoulboundCreditNFT — tier from decrypted score')
         console.log('  → ScoreGatedGovernance — vote with credit tier')
-        console.log('  → MultiAssetLoanPool — ERC-20 collateral lending')
+        console.log('  → MultiAssetLoanPool — ERC-20 collateral lending (USDC/WETH/DAI pre-whitelisted)')
         console.log('  → CrossChainCreditBridge — LayerZero score portability\n')
+        console.log('Mock Tokens:')
+        console.log(`  MockUSDC (6 dec):  ${usdcAddr}`)
+        console.log(`  MockWETH (18 dec): ${wethAddr}`)
+        console.log(`  MockDAI (18 dec):  ${daiAddr}`)
+        console.log(`\n  Faucet: mint() on any token for test funds`)
         console.log('Run: cd frontend && npm run dev\n')
 
         return deployed

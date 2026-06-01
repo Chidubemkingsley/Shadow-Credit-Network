@@ -205,6 +205,19 @@ export const REPUTATION_REGISTRY_ABI = [
 //   3=UpdateMinVoteScore, 4=UpdateVotingPeriod, 5=UpdateExecutionDelay
 // ProposalState enum: 0=Active, 1=Passed, 2=Defeated, 3=Queued, 4=Executed, 5=Cancelled
 export const GOVERNANCE_ABI = [
+  // Errors
+  "error NotEligible()",
+  "error ProposalNotFound()",
+  "error VotingNotActive()",
+  "error AlreadyVoted()",
+  "error ProposalNotPassed()",
+  "error ProposalNotQueued()",
+  "error TimelockNotExpired()",
+  "error AlreadyQueued()",
+  "error AlreadyExecuted()",
+  "error InvalidParam()",
+  "error QuorumNotMet()",
+  "error ScoreOutOfRange()",
   // Propose
   "function propose(uint8 proposalType, uint256 param, string calldata description) external returns (uint256 proposalId)",
   // Vote
@@ -277,6 +290,9 @@ export const MULTI_ASSET_LOAN_POOL_ABI = [
   "error PoolPaused()",
   "error SafeERC20FailedOperation(address token)",
   "error StaleScore()",
+  // Engine errors that propagate through cross-contract calls
+  "error NoCreditData()",
+  "error NotRegistered()",
   "event AssetDisabled(address indexed token)",
   "event AssetPriceUpdated(address indexed token, uint256 priceUsd18)",
   "event AssetWhitelisted(address indexed token, uint8 decimals, string symbol)",
@@ -436,5 +452,14 @@ export const TASK_MANAGER_ABI = [
   "function setVerifierSigner(address signer)",
   "function sliceString(string str, uint256 start, uint256 length) pure returns (string)",
   "function verifyInput((uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) input, address sender) returns (uint256)",
+] as const;
+
+// ── TestERC20 (faucet) ────────────────────────────────────────────────────────────
+export const TEST_ERC20_ABI = [
+  "function mint(address to, uint256 amount) external",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address) view returns (uint256)",
 ] as const;
 
